@@ -75,30 +75,25 @@ func (md *MultiRedisMessageDispatcher) Unsubscribe(channels ...string) {
 
 func (md *MultiRedisMessageDispatcher) Close() {
 	md.mu.Lock()
-	defer md.mu.Unlock()
 	for s := range md.subChannels {
 		UnsubChannelChan <- s
 		delete(md.subChannels, s)
 	}
+	md.mu.Unlock()
 	close(md.pubChannel)
 }
 
 func (md *MultiRedisMessageDispatcher) pub(channel string, msg *redis.Message) {
 	md.mu.RLock()
-	defer md.mu.RUnlock()
 	if _, ok := md.subChannels[channel]; ok {
+		md.mu.RUnlock()
 		if len(md.pubChannel) < 90 {
 			md.pubChannel <- msg
 		}
+		return
 	}
+	md.mu.RUnlock()
 }
-
-var (
-	SubCount     = 0
-	UnsubCount   = 0
-	ConnectCount = 0
-	BreakCount   = 0
-)
 
 type MultiRedisMessageDispatcherPool struct {
 	ctx               context.Context
@@ -109,6 +104,12 @@ type MultiRedisMessageDispatcherPool struct {
 	delDispatcherChan chan *MultiRedisMessageDispatcher
 	dispatcherList    []*MultiRedisMessageDispatcher
 	mu                sync.Mutex
+
+	subChannelsLen int64
+	subCount       int64
+	unsubCount     int64
+	connectCount   int64
+	breakCount     int64
 }
 
 func NewMultiRedisMessageDispatcherPool(ctx context.Context, redisClient *redis.Client) (mdp *MultiRedisMessageDispatcherPool) {
@@ -140,10 +141,8 @@ func (mdp *MultiRedisMessageDispatcherPool) PrintLength(duration time.Duration) 
 			case <-mdp.ctx.Done():
 				return
 			case <-timer.C:
-				mdp.mu.Lock()
-				log.Printf("pubsubDispatcher:MultiRedisMessageDispatcherPool:PrintLength subChannelsLen: %d, redisChanListLen: %d", len(mdp.subChannels), len(mdp.dispatcherList))
-				log.Printf("pubsubDispatcher:MultiRedisMessageDispatcherPool:PrintLength SubCount: %d, UnsubCount: %d, ConnectCount: %+d, BreakCount: %+d", SubCount, UnsubCount, ConnectCount, BreakCount)
-				mdp.mu.Unlock()
+				log.Printf("pubsubDispatcher:MultiRedisMessageDispatcherPool:PrintLength subChannelsLen: %d, redisChanListLen: %d", mdp.subChannelsLen, len(mdp.dispatcherList))
+				log.Printf("pubsubDispatcher:MultiRedisMessageDispatcherPool:PrintLength SubCount: %d, UnsubCount: %d, ConnectCount: %+d, BreakCount: %+d", mdp.subCount, mdp.unsubCount, mdp.connectCount, mdp.breakCount)
 			}
 		}
 	}()
@@ -155,40 +154,34 @@ func (mdp *MultiRedisMessageDispatcherPool) dealSubscribeRequest() {
 		case <-mdp.ctx.Done():
 			return
 		case channel := <-SubChannelChan:
-			go func() {
-				if channel != "" {
-					SubCount++
-					mdp.mu.Lock()
-					if _, ok := mdp.subChannels[channel]; !ok {
-						mdp.subChannels[channel] = 1
-						sub := mdp.redisClient.Subscribe()
-						mdp.redisSubMap[channel] = sub
-						go mdp.receiveAndPushByChannel(sub, channel)
-					} else {
-						mdp.subChannels[channel]++
-					}
-					mdp.mu.Unlock()
+			if channel != "" {
+				mdp.subCount++
+				if _, ok := mdp.subChannels[channel]; !ok {
+					mdp.subChannels[channel] = 1
+					sub := mdp.redisClient.Subscribe()
+					mdp.redisSubMap[channel] = sub
+					mdp.subChannelsLen++
+					go mdp.receiveAndPushByChannel(sub, channel)
+				} else {
+					mdp.subChannels[channel]++
 				}
-			}()
+			}
 		case channel := <-UnsubChannelChan:
-			go func() {
-				if channel != "" {
-					UnsubCount++
-					mdp.mu.Lock()
-					if _, ok := mdp.subChannels[channel]; ok {
-						mdp.subChannels[channel]--
-						if mdp.subChannels[channel] <= 0 {
-							delete(mdp.subChannels, channel)
-							if sub, ok := mdp.redisSubMap[channel]; ok {
-								if err := sub.Close(); err != nil {
-									log.Printf("pubsubDispatcher:MultiRedisMessageDispatcherPool:dealSubscribeRequest close redis sub err: %s", err)
-								}
+			if channel != "" {
+				mdp.unsubCount++
+				if _, ok := mdp.subChannels[channel]; ok {
+					mdp.subChannels[channel]--
+					if mdp.subChannels[channel] <= 0 {
+						delete(mdp.subChannels, channel)
+						mdp.subChannelsLen--
+						if sub, ok := mdp.redisSubMap[channel]; ok {
+							if err := sub.Close(); err != nil {
+								log.Printf("pubsubDispatcher:MultiRedisMessageDispatcherPool:dealSubscribeRequest close redis sub err: %s", err)
 							}
 						}
 					}
-					mdp.mu.Unlock()
 				}
-			}()
+			}
 		}
 	}
 }
@@ -228,19 +221,15 @@ func (mdp *MultiRedisMessageDispatcherPool) dealDispatcherRequest() {
 			return
 		case dispatcher, ok := <-mdp.addDispatcherChan:
 			if ok {
-				ConnectCount++
-				mdp.mu.Lock()
+				mdp.connectCount++
 				mdp.dispatcherList = append(mdp.dispatcherList, dispatcher)
-				mdp.mu.Unlock()
 			}
 		case dispatcher, ok := <-mdp.delDispatcherChan:
 			if ok {
-				BreakCount++
+				mdp.breakCount++
 				for key, dp := range mdp.dispatcherList {
 					if dp == dispatcher {
-						mdp.mu.Lock()
 						mdp.dispatcherList = append(mdp.dispatcherList[0:key], mdp.dispatcherList[key+1:]...)
-						mdp.mu.Unlock()
 						dispatcher.Close()
 						break
 					}

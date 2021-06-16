@@ -127,16 +127,18 @@ func TestSingleRedisMessageDispatcher(t *testing.T) {
 		}
 	}()
 
-	pipe := redisCli.Pipeline()
+	time.Sleep(time.Millisecond * 100)
+
 	for i := 0; i < 30000; i++ {
+		pipe := redisCli.Pipeline()
 		pipe.Publish("test_channel:1", 1)
 		pipe.Publish("test_channel:2", 2)
 		pipe.Publish("test_channel:3", 3)
 		pipe.Publish("test_channel:4", 4)
+		_, _ = pipe.Exec()
 	}
-	_, _ = pipe.Exec()
 
-	time.Sleep(time.Millisecond * 60)
+	time.Sleep(time.Millisecond * 100)
 	dp.DelDispatcher(p1)
 	dp.DelDispatcher(p2)
 	dp.DelDispatcher(p3)
