@@ -32,7 +32,7 @@ func TestSingleRedisMessageDispatcher(t *testing.T) {
 	})
 	// register dispatcher pool
 	dp, err := RegisterSingleRedisDispatcherPool("default", redisCli, "test_channel:*")
-	if err != nil && dp == nil {
+	if err != nil {
 		t.Fatalf("RegisterSingleRedisDispatcherPool err: %s", err)
 	}
 	// get dispatcher pool
@@ -129,7 +129,7 @@ func TestSingleRedisMessageDispatcher(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 
-	for i := 0; i < 30000; i++ {
+	for i := 0; i < 10000; i++ {
 		pipe := redisCli.Pipeline()
 		pipe.Publish("test_channel:1", 1)
 		pipe.Publish("test_channel:2", 2)

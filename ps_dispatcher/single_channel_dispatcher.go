@@ -9,36 +9,30 @@ import (
 )
 
 var (
-	singleDispatcherMap = make(map[string]*SingleRedisMessageDispatcherPool)
-	singleDispatcherMu  = sync.RWMutex{}
+	singleDispatcherMap = sync.Map{} //make(map[string]*SingleRedisMessageDispatcherPool)
 )
 
 func GetSingleRedisDispatcherPool(alias string) (*SingleRedisMessageDispatcherPool, error) {
-	singleDispatcherMu.RLock()
-	defer singleDispatcherMu.RUnlock()
-	if dispatch, ok := singleDispatcherMap[alias]; ok {
-		return dispatch, nil
+	if dispatchLoad, ok := singleDispatcherMap.Load(alias); ok {
+		return dispatchLoad.(*SingleRedisMessageDispatcherPool), nil
 	}
 	return nil, fmt.Errorf("pubsubDispatcher:GetSingleRedisDispatcherPool dispatcher not fund")
 }
 
 func RegisterSingleRedisDispatcherPool(alias string, redisCli *redis.Client, subChannel string) (dp *SingleRedisMessageDispatcherPool, err error) {
-	singleDispatcherMu.Lock()
-	ok := false
-	if dp, ok = singleDispatcherMap[alias]; ok {
-		singleDispatcherMu.Unlock()
-		return dp, fmt.Errorf("pubsubDispatcher:RegisterSingleRedisDispatcherPool fail. alias: %s has allready used. ", alias)
+	if _, ok := singleDispatcherMap.Load(alias); ok {
+		return nil, fmt.Errorf("pubsubDispatcher:RegisterSingleRedisDispatcherPool fail. alias: %s has allready used. ", alias)
 	}
-	singleDispatcherMap[alias] = &SingleRedisMessageDispatcherPool{}
-	singleDispatcherMu.Unlock()
-
+	singleDispatcherMap.Store(alias, &SingleRedisMessageDispatcherPool{})
 	defer func() {
-		singleDispatcherMu.Lock()
-		if err != nil || singleDispatcherMap[alias].ctx == nil {
-			delete(singleDispatcherMap, alias)
+		if err != nil {
+			singleDispatcherMap.Delete(alias)
 		}
-		singleDispatcherMu.Unlock()
+		if dispatcherLoad, ok := singleDispatcherMap.Load(alias); !ok || dispatcherLoad.(*SingleRedisMessageDispatcherPool).ctx == nil {
+			singleDispatcherMap.Delete(alias)
+		}
 	}()
+
 	subscribe := redisCli.Subscribe()
 	err = subscribe.PSubscribe(subChannel)
 	if err != nil {
@@ -67,9 +61,7 @@ func RegisterSingleRedisDispatcherPool(alias string, redisCli *redis.Client, sub
 	ch := subscribe.Channel()
 
 	dp = NewRedisMessageDispatcherPool(context.Background(), subscribe, ch)
-	singleDispatcherMu.Lock()
-	singleDispatcherMap[alias] = dp
-	singleDispatcherMu.Unlock()
+	singleDispatcherMap.Store(alias, dp)
 	return dp, nil
 }
 
@@ -118,8 +110,7 @@ func NewRedisMessageDispatcherPool(ctx context.Context, subscribe *redis.PubSub,
 	pool.addDispatcherChan = make(chan *SingleRedisMessageDispatcher, 500)
 	pool.delDispatcherChan = make(chan *SingleRedisMessageDispatcher, 500)
 
-	go pool.dealDispatcherRequest()
-	go pool.receive()
+	go pool.dealDispatcherRequestAndReceive()
 
 	return pool
 }
@@ -133,7 +124,6 @@ type SingleRedisMessageDispatcherPool struct {
 	pubChannel        chan *redis.Message
 	addDispatcherChan chan *SingleRedisMessageDispatcher
 	delDispatcherChan chan *SingleRedisMessageDispatcher
-	dispatcherMu      sync.RWMutex
 	dispatcherMap     map[string][]*SingleRedisMessageDispatcher
 }
 
@@ -154,63 +144,44 @@ func (p *SingleRedisMessageDispatcherPool) DelDispatcher(dispatcher *SingleRedis
 	p.delDispatcherChan <- dispatcher
 }
 
-func (p *SingleRedisMessageDispatcherPool) dealDispatcherRequest() {
+func (p *SingleRedisMessageDispatcherPool) dealDispatcherRequestAndReceive() {
 	for {
 		select {
 		case <-p.ctx.Done():
 			close(p.delDispatcherChan)
 			close(p.addDispatcherChan)
+			close(p.pubChannel)
 			return
 		case dispatcher := <-p.addDispatcherChan:
 			if dispatcher == nil {
 				continue
 			}
-			go func() {
-				subChannel := dispatcher.subChannel
-				p.dispatcherMu.Lock()
-				_, ok := p.dispatcherMap[subChannel]
-				if !ok {
-					p.dispatcherMap[subChannel] = make([]*SingleRedisMessageDispatcher, 0)
-				}
-				p.dispatcherMap[subChannel] = append(p.dispatcherMap[subChannel], dispatcher)
-				p.dispatcherMu.Unlock()
-			}()
+			subChannel := dispatcher.subChannel
+			_, ok := p.dispatcherMap[subChannel]
+			if !ok {
+				p.dispatcherMap[subChannel] = make([]*SingleRedisMessageDispatcher, 0)
+			}
+			p.dispatcherMap[subChannel] = append(p.dispatcherMap[subChannel], dispatcher)
 		case dispatcher := <-p.delDispatcherChan:
 			if dispatcher == nil {
 				continue
 			}
-			go func() {
-				subChannel := dispatcher.subChannel
-				p.dispatcherMu.Lock()
-				if dispatcherList, ok := p.dispatcherMap[subChannel]; ok {
-					for key, d := range dispatcherList {
-						if d == dispatcher {
-							p.dispatcherMap[subChannel] = append(p.dispatcherMap[subChannel][0:key], p.dispatcherMap[subChannel][key+1:]...)
-						}
+			subChannel := dispatcher.subChannel
+			if dispatcherList, ok := p.dispatcherMap[subChannel]; ok {
+				for key, d := range dispatcherList {
+					if d == dispatcher {
+						p.dispatcherMap[subChannel] = append(p.dispatcherMap[subChannel][0:key], p.dispatcherMap[subChannel][key+1:]...)
 					}
-					dispatcher.Close()
 				}
-				p.dispatcherMu.Unlock()
-			}()
-		}
-	}
-}
-
-func (p *SingleRedisMessageDispatcherPool) receive() {
-	for {
-		select {
-		case <-p.ctx.Done():
-			close(p.pubChannel)
-			return
+				dispatcher.Close()
+			}
 		case msg := <-p.redisChan:
 			if msg == nil {
 				continue
 			}
 			p.pub(msg)
 			// 分发到其他订阅组
-			p.dispatcherMu.RLock()
 			dispatcherList, ok := p.dispatcherMap[msg.Channel]
-			p.dispatcherMu.RUnlock()
 			if ok {
 				for _, dispatcher := range dispatcherList {
 					dispatcher.pub(msg)
