@@ -3,7 +3,7 @@ package ps_dispatcher
 import (
 	"context"
 	"flag"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"log"
 	"os"
 	"runtime/pprof"
@@ -131,11 +131,11 @@ func TestSingleRedisMessageDispatcher(t *testing.T) {
 
 	for i := 0; i < 100000; i++ {
 		pipe := redisCli.Pipeline()
-		pipe.Publish("test_channel:1", 1)
-		pipe.Publish("test_channel:2", 2)
-		pipe.Publish("test_channel:3", 3)
-		pipe.Publish("test_channel:4", 4)
-		_, _ = pipe.Exec()
+		pipe.Publish(context.Background(), "test_channel:1", 1)
+		pipe.Publish(context.Background(), "test_channel:2", 2)
+		pipe.Publish(context.Background(), "test_channel:3", 3)
+		pipe.Publish(context.Background(), "test_channel:4", 4)
+		_, _ = pipe.Exec(context.Background())
 	}
 
 	time.Sleep(time.Millisecond * 100)
@@ -289,14 +289,14 @@ func TestMultiRedisMessageDispatcher(t *testing.T) {
 
 	for i := 0; i < 100000; i++ {
 		pipe := redisCli.Pipeline()
-		pipe.Publish("test_channel:1", 1)
-		pipe.Publish("test_channel:2", 2)
-		pipe.Publish("test_channel:3", 3)
-		pipe.Publish("test_channel:4", 4)
-		pipe.Publish("test_channel:5", 5)
-		pipe.Publish("test_channel:6", 6)
-		pipe.Publish("test_channel:12", 12)
-		_, _ = pipe.Exec()
+		pipe.Publish(context.Background(), "test_channel:1", 1)
+		pipe.Publish(context.Background(), "test_channel:2", 2)
+		pipe.Publish(context.Background(), "test_channel:3", 3)
+		pipe.Publish(context.Background(), "test_channel:4", 4)
+		pipe.Publish(context.Background(), "test_channel:5", 5)
+		pipe.Publish(context.Background(), "test_channel:6", 6)
+		pipe.Publish(context.Background(), "test_channel:12", 12)
+		_, _ = pipe.Exec(context.Background())
 	}
 
 	// wait for msg receive

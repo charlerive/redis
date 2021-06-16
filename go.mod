@@ -2,4 +2,4 @@ module github.com/charlerive/redis
 
 go 1.15
 
-require github.com/go-redis/redis v6.15.9+incompatible
+require github.com/go-redis/redis/v8 v8.10.0

@@ -3,7 +3,7 @@ package ps_dispatcher
 import (
 	"context"
 	"fmt"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"log"
 	"sync"
 )
@@ -33,14 +33,14 @@ func RegisterSingleRedisDispatcherPool(alias string, redisCli *redis.Client, sub
 		}
 	}()
 
-	subscribe := redisCli.Subscribe()
-	err = subscribe.PSubscribe(subChannel)
+	subscribe := redisCli.Subscribe(context.Background())
+	err = subscribe.PSubscribe(context.Background(), subChannel)
 	if err != nil {
 		log.Printf("pubsubDispatcher:RegisterSingleRedisDispatcherPool subscribe.PSubscribe %s fail, err: %s", subChannel, err.Error())
 		return nil, fmt.Errorf("Dispatcher:RegisterSingleRedisDispatcherPool subscribe.PSubscribe %s fail, err: %s", subChannel, err.Error())
 	}
 	var iFace interface{}
-	iFace, err = subscribe.Receive()
+	iFace, err = subscribe.Receive(context.Background())
 	if err != nil {
 		log.Printf("pubsubDispatcher:RegisterSingleRedisDispatcherPool subscribe.Receive fail. err:%s ", err.Error())
 		return nil, fmt.Errorf("Dispatcher:RegisterSingleRedisDispatcherPool subscribe.Receive fail. err:%s ", err.Error())

@@ -3,7 +3,7 @@ package ps_dispatcher
 import (
 	"bytes"
 	"context"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"log"
 	"strings"
 	"sync"
@@ -201,7 +201,7 @@ func (mdp *MultiRedisMessageDispatcherPool) dealSubscribeRequest() {
 				mdp.subCount++
 				if _, ok := mdp.subChannels[channel]; !ok {
 					mdp.subChannels[channel] = 1
-					sub := mdp.redisClient.Subscribe()
+					sub := mdp.redisClient.Subscribe(mdp.ctx)
 					mdp.redisSubMap[channel] = sub
 					mdp.subChannelsLen++
 					go mdp.receiveAndPushByChannel(sub, channel)
@@ -231,9 +231,9 @@ func (mdp *MultiRedisMessageDispatcherPool) dealSubscribeRequest() {
 
 func (mdp *MultiRedisMessageDispatcherPool) receiveAndPushByChannel(sub *redis.PubSub, channel string) {
 	if strings.Contains(channel, "*") || strings.Contains(channel, "?") {
-		_ = sub.PSubscribe(channel)
+		_ = sub.PSubscribe(mdp.ctx, channel)
 	} else {
-		_ = sub.Subscribe(channel)
+		_ = sub.Subscribe(mdp.ctx, channel)
 	}
 	ch := sub.Channel()
 	for {
