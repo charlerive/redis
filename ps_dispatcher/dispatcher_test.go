@@ -129,7 +129,7 @@ func TestSingleRedisMessageDispatcher(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 100000; i++ {
 		pipe := redisCli.Pipeline()
 		pipe.Publish("test_channel:1", 1)
 		pipe.Publish("test_channel:2", 2)
@@ -282,12 +282,12 @@ func TestMultiRedisMessageDispatcher(t *testing.T) {
 	}()
 
 	md1.Unsubscribe("test_channel:1")
-	log.Printf("md1.channels: %s", md1.String())
+	md1.PSubscribe("test_channel:1*")
 
 	// sleep for MultiRedisMessageDispatcher add
 	time.Sleep(time.Second)
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 100000; i++ {
 		pipe := redisCli.Pipeline()
 		pipe.Publish("test_channel:1", 1)
 		pipe.Publish("test_channel:2", 2)
@@ -295,6 +295,7 @@ func TestMultiRedisMessageDispatcher(t *testing.T) {
 		pipe.Publish("test_channel:4", 4)
 		pipe.Publish("test_channel:5", 5)
 		pipe.Publish("test_channel:6", 6)
+		pipe.Publish("test_channel:12", 12)
 		_, _ = pipe.Exec()
 	}
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"github.com/go-redis/redis"
 	"log"
+	"strings"
 	"sync"
 	"time"
 )
@@ -15,14 +16,17 @@ var (
 )
 
 type MultiRedisMessageDispatcher struct {
-	mu          sync.RWMutex
-	pubChannel  chan *redis.Message
-	subChannels sync.Map // map[string]struct{}
+	mu             sync.RWMutex
+	pubChannel     chan *redis.Message
+	subChannels    sync.Map // map[string]struct{}
+	subPatterns    sync.Map // map[string]struct{}
+	subPatternsLen int
 }
 
 func (md *MultiRedisMessageDispatcher) Init() {
 	md.pubChannel = make(chan *redis.Message, 100)
 	md.subChannels = sync.Map{}
+	md.subPatterns = sync.Map{}
 }
 
 func (md *MultiRedisMessageDispatcher) Channel() chan *redis.Message {
@@ -33,6 +37,11 @@ func (md *MultiRedisMessageDispatcher) String() string {
 	buf := bytes.Buffer{}
 	md.subChannels.Range(func(channel, _ interface{}) bool {
 		buf.WriteString(channel.(string))
+		buf.WriteString(",")
+		return true
+	})
+	md.subPatterns.Range(func(pattern, _ interface{}) bool {
+		buf.WriteString(pattern.(string))
 		buf.WriteString(",")
 		return true
 	})
@@ -68,21 +77,64 @@ func (md *MultiRedisMessageDispatcher) Unsubscribe(channels ...string) {
 	}
 }
 
+func (md *MultiRedisMessageDispatcher) PSubscribe(patterns ...string) {
+	for k, pattern := range patterns {
+		if _, ok := md.subPatterns.Load(pattern); ok {
+			patterns = append(patterns[0:k], patterns[k+1:]...)
+			continue
+		}
+		md.subPatternsLen++
+		md.subPatterns.Store(pattern, struct{}{})
+	}
+
+	for _, p := range patterns {
+		SubChannelChan <- p
+	}
+}
+
+func (md *MultiRedisMessageDispatcher) PUnsubscribe(patterns ...string) {
+	for k, pattern := range patterns {
+		if _, ok := md.subPatterns.Load(pattern); !ok {
+			patterns = append(patterns[0:k], patterns[k+1:]...)
+			continue
+		}
+		md.subPatternsLen--
+		md.subPatterns.Delete(pattern)
+	}
+
+	for _, p := range patterns {
+		UnsubChannelChan <- p
+	}
+}
+
 func (md *MultiRedisMessageDispatcher) Close() {
 	md.subChannels.Range(func(channel, _ interface{}) bool {
 		UnsubChannelChan <- channel.(string)
 		md.subChannels.Delete(channel)
 		return true
 	})
+
+	md.subPatterns.Range(func(pattern, _ interface{}) bool {
+		UnsubChannelChan <- pattern.(string)
+		md.subPatterns.Delete(pattern)
+		return true
+	})
 	close(md.pubChannel)
 }
 
 func (md *MultiRedisMessageDispatcher) pub(msg *redis.Message) {
-	if _, ok := md.subChannels.Load(msg.Channel); ok {
-		if len(md.pubChannel) < 90 {
-			md.pubChannel <- msg
+	if msg.Pattern == "" {
+		if _, ok := md.subChannels.Load(msg.Channel); ok {
+			if len(md.pubChannel) < 90 {
+				md.pubChannel <- msg
+			}
 		}
-		return
+	} else if md.subPatternsLen > 0 {
+		if _, ok := md.subPatterns.Load(msg.Pattern); ok {
+			if len(md.pubChannel) < 90 {
+				md.pubChannel <- msg
+			}
+		}
 	}
 }
 
@@ -178,7 +230,11 @@ func (mdp *MultiRedisMessageDispatcherPool) dealSubscribeRequest() {
 }
 
 func (mdp *MultiRedisMessageDispatcherPool) receiveAndPushByChannel(sub *redis.PubSub, channel string) {
-	_ = sub.Subscribe(channel)
+	if strings.Contains(channel, "*") || strings.Contains(channel, "?") {
+		_ = sub.PSubscribe(channel)
+	} else {
+		_ = sub.Subscribe(channel)
+	}
 	ch := sub.Channel()
 	for {
 		select {
