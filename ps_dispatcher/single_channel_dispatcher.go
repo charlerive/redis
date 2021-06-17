@@ -13,7 +13,7 @@ var (
 )
 
 func GetSingleRedisDispatcherPool(alias string) (*SingleRedisMessageDispatcherPool, error) {
-	if dispatchLoad, ok := singleDispatcherMap.Load(alias); ok {
+	if dispatchLoad, ok := singleDispatcherMap.Load(alias); ok && dispatchLoad.(*SingleRedisMessageDispatcherPool).ctx != nil {
 		return dispatchLoad.(*SingleRedisMessageDispatcherPool), nil
 	}
 	return nil, fmt.Errorf("pubsubDispatcher:GetSingleRedisDispatcherPool dispatcher not fund")
