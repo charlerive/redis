@@ -3,6 +3,7 @@ package batch_operate
 import (
 	"context"
 	"github.com/go-redis/redis/v8"
+	"log"
 	"time"
 )
 
@@ -45,7 +46,7 @@ func NewBatchOperate(ctx context.Context, redisCli *redis.Client, maxLen int, du
 		ticker:    time.NewTicker(duration),
 		maxLen:    maxLen,
 		redisCli:  redisCli,
-		batchChan: make(chan *Operate, 1500),
+		batchChan: make(chan *Operate, 5000),
 	}
 	go batchOperate.Start()
 	return batchOperate
@@ -66,6 +67,7 @@ func (bo *BatchOperate) Start() {
 				_, _ = pipe.Exec(bo.ctx)
 				pipe = bo.redisCli.Pipeline()
 				cacheLen = 0
+				log.Printf("reach ticker duration")
 			}
 		case op := <-bo.batchChan:
 			cacheLen++
@@ -93,6 +95,7 @@ func (bo *BatchOperate) Start() {
 				_, _ = pipe.Exec(bo.ctx)
 				pipe = bo.redisCli.Pipeline()
 				cacheLen = 0
+				log.Printf("reach max len")
 			}
 		}
 	}
@@ -137,7 +140,7 @@ func (bo *BatchOperate) Publish(channel string, message interface{}) {
 
 func (bo *BatchOperate) LPush(key string, values ...interface{}) {
 	op := &Operate{
-		OpType: Pub,
+		OpType: LPush,
 		Key:    key,
 		Args:   values,
 	}
@@ -146,7 +149,7 @@ func (bo *BatchOperate) LPush(key string, values ...interface{}) {
 
 func (bo *BatchOperate) RPush(key string, values ...interface{}) {
 	op := &Operate{
-		OpType: Pub,
+		OpType: RPush,
 		Key:    key,
 		Args:   values,
 	}
