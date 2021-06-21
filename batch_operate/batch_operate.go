@@ -3,7 +3,6 @@ package batch_operate
 import (
 	"context"
 	"github.com/go-redis/redis/v8"
-	"log"
 	"time"
 )
 
@@ -67,7 +66,6 @@ func (bo *BatchOperate) Start() {
 				_, _ = pipe.Exec(bo.ctx)
 				pipe = bo.redisCli.Pipeline()
 				cacheLen = 0
-				log.Printf("reach ticker duration")
 			}
 		case op := <-bo.batchChan:
 			cacheLen++
@@ -95,7 +93,6 @@ func (bo *BatchOperate) Start() {
 				_, _ = pipe.Exec(bo.ctx)
 				pipe = bo.redisCli.Pipeline()
 				cacheLen = 0
-				log.Printf("reach max len")
 			}
 		}
 	}
