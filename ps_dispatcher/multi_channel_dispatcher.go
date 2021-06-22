@@ -10,23 +10,20 @@ import (
 	"time"
 )
 
-var (
-	SubChannelChan   = make(chan string, 2000)
-	UnsubChannelChan = make(chan string, 2000)
-)
-
 type MultiChannelDispatcher struct {
 	mu             sync.RWMutex
 	pubChannel     chan *redis.Message
 	subChannels    sync.Map // map[string]struct{}
 	subPatterns    sync.Map // map[string]struct{}
 	subPatternsLen int
+	mdp            *MultiChannelDispatcherPool
 }
 
-func (md *MultiChannelDispatcher) Init() {
+func (md *MultiChannelDispatcher) Init(mdp *MultiChannelDispatcherPool) {
 	md.pubChannel = make(chan *redis.Message, 100)
 	md.subChannels = sync.Map{}
 	md.subPatterns = sync.Map{}
+	md.mdp = mdp
 }
 
 func (md *MultiChannelDispatcher) Channel() chan *redis.Message {
@@ -59,7 +56,7 @@ func (md *MultiChannelDispatcher) Subscribe(channels ...string) {
 	}
 
 	for _, s := range channels {
-		SubChannelChan <- s
+		md.mdp.subChannelChan <- s
 	}
 }
 
@@ -73,7 +70,7 @@ func (md *MultiChannelDispatcher) Unsubscribe(channels ...string) {
 	}
 
 	for _, s := range channels {
-		UnsubChannelChan <- s
+		md.mdp.unsubChannelChan <- s
 	}
 }
 
@@ -88,7 +85,7 @@ func (md *MultiChannelDispatcher) PSubscribe(patterns ...string) {
 	}
 
 	for _, p := range patterns {
-		SubChannelChan <- p
+		md.mdp.subChannelChan <- p
 	}
 }
 
@@ -103,19 +100,19 @@ func (md *MultiChannelDispatcher) PUnsubscribe(patterns ...string) {
 	}
 
 	for _, p := range patterns {
-		UnsubChannelChan <- p
+		md.mdp.unsubChannelChan <- p
 	}
 }
 
 func (md *MultiChannelDispatcher) Close() {
 	md.subChannels.Range(func(channel, _ interface{}) bool {
-		UnsubChannelChan <- channel.(string)
+		md.mdp.unsubChannelChan <- channel.(string)
 		md.subChannels.Delete(channel)
 		return true
 	})
 
 	md.subPatterns.Range(func(pattern, _ interface{}) bool {
-		UnsubChannelChan <- pattern.(string)
+		md.mdp.unsubChannelChan <- pattern.(string)
 		md.subPatterns.Delete(pattern)
 		return true
 	})
@@ -147,6 +144,8 @@ type MultiChannelDispatcherPool struct {
 	delDispatcherChan chan *MultiChannelDispatcher
 	dispatcherList    []*MultiChannelDispatcher
 	mu                sync.Mutex
+	subChannelChan    chan string
+	unsubChannelChan  chan string
 
 	subChannelsLen int64
 	subCount       int64
@@ -168,6 +167,8 @@ func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Clien
 		delDispatcherChan: make(chan *MultiChannelDispatcher, 100),
 		dispatcherList:    make([]*MultiChannelDispatcher, 0),
 		mu:                sync.Mutex{},
+		subChannelChan:    make(chan string, 2000),
+		unsubChannelChan:  make(chan string, 2000),
 	}
 
 	go mdp.dealSubscribeRequest()
@@ -196,7 +197,7 @@ func (mdp *MultiChannelDispatcherPool) dealSubscribeRequest() {
 		select {
 		case <-mdp.ctx.Done():
 			return
-		case channel, ok := <-SubChannelChan:
+		case channel, ok := <-mdp.subChannelChan:
 			if ok {
 				mdp.subCount++
 				if _, ok := mdp.subChannels[channel]; !ok {
@@ -209,7 +210,7 @@ func (mdp *MultiChannelDispatcherPool) dealSubscribeRequest() {
 					mdp.subChannels[channel]++
 				}
 			}
-		case channel, ok := <-UnsubChannelChan:
+		case channel, ok := <-mdp.unsubChannelChan:
 			if ok {
 				mdp.unsubCount++
 				if _, ok := mdp.subChannels[channel]; ok {
