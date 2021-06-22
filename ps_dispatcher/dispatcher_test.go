@@ -167,7 +167,7 @@ func TestMultiChannelDispatcher(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 
-	mdp := NewMultiChannelDispatcherPool(context.Background(), redisCli)
+	mdp := NewMultiChannelDispatcherPool(context.Background(), redisCli, DispatcherModeMultiConn)
 	//mdp.PrintLength(time.Millisecond * 100)
 
 	md1 := &MultiChannelDispatcher{}

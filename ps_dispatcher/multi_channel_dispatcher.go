@@ -137,8 +137,10 @@ func (md *MultiChannelDispatcher) pub(msg *redis.Message) {
 
 type MultiChannelDispatcherPool struct {
 	ctx               context.Context
+	mode              dispatcherMode
 	redisClient       *redis.Client
 	subChannels       map[string]int64
+	redisSub          *redis.PubSub
 	redisSubMap       map[string]*redis.PubSub
 	addDispatcherChan chan *MultiChannelDispatcher
 	delDispatcherChan chan *MultiChannelDispatcher
@@ -154,7 +156,14 @@ type MultiChannelDispatcherPool struct {
 	breakCount     int64
 }
 
-func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Client) (mdp *MultiChannelDispatcherPool) {
+type dispatcherMode uint8
+
+const (
+	DispatcherModeSingleConn dispatcherMode = 1
+	DispatcherModeMultiConn  dispatcherMode = 2
+)
+
+func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Client, mode dispatcherMode) (mdp *MultiChannelDispatcherPool) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -162,7 +171,6 @@ func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Clien
 		ctx:               ctx,
 		redisClient:       redisClient,
 		subChannels:       make(map[string]int64),
-		redisSubMap:       make(map[string]*redis.PubSub),
 		addDispatcherChan: make(chan *MultiChannelDispatcher, 100),
 		delDispatcherChan: make(chan *MultiChannelDispatcher, 100),
 		dispatcherList:    make([]*MultiChannelDispatcher, 0),
@@ -171,7 +179,14 @@ func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Clien
 		unsubChannelChan:  make(chan string, 2000),
 	}
 
-	go mdp.dealSubscribeRequest()
+	if mode == DispatcherModeSingleConn {
+		mdp.redisSub = redisClient.Subscribe(ctx)
+		go mdp.dealSubscribeRequestAndReceive()
+	} else if mode == DispatcherModeMultiConn {
+		mdp.redisSubMap = make(map[string]*redis.PubSub)
+		go mdp.dealSubscribeRequest()
+	}
+
 	go mdp.dealDispatcherRequest()
 
 	return mdp
@@ -190,6 +205,57 @@ func (mdp *MultiChannelDispatcherPool) PrintLength(duration time.Duration) {
 			}
 		}
 	}()
+}
+
+func (mdp *MultiChannelDispatcherPool) dealSubscribeRequestAndReceive() {
+	for {
+		select {
+		case <-mdp.ctx.Done():
+			close(mdp.delDispatcherChan)
+			close(mdp.addDispatcherChan)
+			close(mdp.subChannelChan)
+			close(mdp.unsubChannelChan)
+			return
+		case channel, ok := <-mdp.subChannelChan:
+			if ok {
+				mdp.subCount++
+				if _, ok := mdp.subChannels[channel]; !ok {
+					mdp.subChannels[channel] = 1
+					if strings.Contains(channel, "*") || strings.Contains(channel, "?") {
+						_ = mdp.redisSub.PSubscribe(mdp.ctx, channel)
+					} else {
+						_ = mdp.redisSub.Subscribe(mdp.ctx, channel)
+					}
+					mdp.subChannelsLen++
+				} else {
+					mdp.subChannels[channel]++
+				}
+			}
+		case channel, ok := <-mdp.unsubChannelChan:
+			if ok {
+				mdp.unsubCount++
+				if _, ok := mdp.subChannels[channel]; ok {
+					mdp.subChannels[channel]--
+					if mdp.subChannels[channel] <= 0 {
+						delete(mdp.subChannels, channel)
+						mdp.subChannelsLen--
+						if strings.Contains(channel, "*") || strings.Contains(channel, "?") {
+							_ = mdp.redisSub.PUnsubscribe(mdp.ctx, channel)
+						} else {
+							_ = mdp.redisSub.Unsubscribe(mdp.ctx, channel)
+						}
+					}
+				}
+			}
+		case msg, ok := <-mdp.redisSub.Channel():
+			if !ok {
+				continue
+			}
+			for _, redisChan := range mdp.dispatcherList {
+				redisChan.pub(msg)
+			}
+		}
+	}
 }
 
 func (mdp *MultiChannelDispatcherPool) dealSubscribeRequest() {
@@ -240,6 +306,7 @@ func (mdp *MultiChannelDispatcherPool) receiveAndPushByChannel(sub *redis.PubSub
 	for {
 		select {
 		case <-mdp.ctx.Done():
+			_ = sub.Close()
 			return
 		case msg, ok := <-ch:
 			if !ok {
