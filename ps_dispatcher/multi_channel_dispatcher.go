@@ -15,7 +15,7 @@ var (
 	UnsubChannelChan = make(chan string, 2000)
 )
 
-type MultiRedisMessageDispatcher struct {
+type MultiChannelDispatcher struct {
 	mu             sync.RWMutex
 	pubChannel     chan *redis.Message
 	subChannels    sync.Map // map[string]struct{}
@@ -23,17 +23,17 @@ type MultiRedisMessageDispatcher struct {
 	subPatternsLen int
 }
 
-func (md *MultiRedisMessageDispatcher) Init() {
+func (md *MultiChannelDispatcher) Init() {
 	md.pubChannel = make(chan *redis.Message, 100)
 	md.subChannels = sync.Map{}
 	md.subPatterns = sync.Map{}
 }
 
-func (md *MultiRedisMessageDispatcher) Channel() chan *redis.Message {
+func (md *MultiChannelDispatcher) Channel() chan *redis.Message {
 	return md.pubChannel
 }
 
-func (md *MultiRedisMessageDispatcher) String() string {
+func (md *MultiChannelDispatcher) String() string {
 	buf := bytes.Buffer{}
 	md.subChannels.Range(func(channel, _ interface{}) bool {
 		buf.WriteString(channel.(string))
@@ -49,7 +49,7 @@ func (md *MultiRedisMessageDispatcher) String() string {
 	return channels[:len(channels)-1]
 }
 
-func (md *MultiRedisMessageDispatcher) Subscribe(channels ...string) {
+func (md *MultiChannelDispatcher) Subscribe(channels ...string) {
 	for k, channel := range channels {
 		if _, ok := md.subChannels.Load(channel); ok {
 			channels = append(channels[0:k], channels[k+1:]...)
@@ -63,7 +63,7 @@ func (md *MultiRedisMessageDispatcher) Subscribe(channels ...string) {
 	}
 }
 
-func (md *MultiRedisMessageDispatcher) Unsubscribe(channels ...string) {
+func (md *MultiChannelDispatcher) Unsubscribe(channels ...string) {
 	for k, channel := range channels {
 		if _, ok := md.subChannels.Load(channel); !ok {
 			channels = append(channels[0:k], channels[k+1:]...)
@@ -77,7 +77,7 @@ func (md *MultiRedisMessageDispatcher) Unsubscribe(channels ...string) {
 	}
 }
 
-func (md *MultiRedisMessageDispatcher) PSubscribe(patterns ...string) {
+func (md *MultiChannelDispatcher) PSubscribe(patterns ...string) {
 	for k, pattern := range patterns {
 		if _, ok := md.subPatterns.Load(pattern); ok {
 			patterns = append(patterns[0:k], patterns[k+1:]...)
@@ -92,7 +92,7 @@ func (md *MultiRedisMessageDispatcher) PSubscribe(patterns ...string) {
 	}
 }
 
-func (md *MultiRedisMessageDispatcher) PUnsubscribe(patterns ...string) {
+func (md *MultiChannelDispatcher) PUnsubscribe(patterns ...string) {
 	for k, pattern := range patterns {
 		if _, ok := md.subPatterns.Load(pattern); !ok {
 			patterns = append(patterns[0:k], patterns[k+1:]...)
@@ -107,7 +107,7 @@ func (md *MultiRedisMessageDispatcher) PUnsubscribe(patterns ...string) {
 	}
 }
 
-func (md *MultiRedisMessageDispatcher) Close() {
+func (md *MultiChannelDispatcher) Close() {
 	md.subChannels.Range(func(channel, _ interface{}) bool {
 		UnsubChannelChan <- channel.(string)
 		md.subChannels.Delete(channel)
@@ -122,7 +122,7 @@ func (md *MultiRedisMessageDispatcher) Close() {
 	close(md.pubChannel)
 }
 
-func (md *MultiRedisMessageDispatcher) pub(msg *redis.Message) {
+func (md *MultiChannelDispatcher) pub(msg *redis.Message) {
 	if msg.Pattern == "" {
 		if _, ok := md.subChannels.Load(msg.Channel); ok {
 			if len(md.pubChannel) < 90 {
@@ -138,14 +138,14 @@ func (md *MultiRedisMessageDispatcher) pub(msg *redis.Message) {
 	}
 }
 
-type MultiRedisMessageDispatcherPool struct {
+type MultiChannelDispatcherPool struct {
 	ctx               context.Context
 	redisClient       *redis.Client
 	subChannels       map[string]int64
 	redisSubMap       map[string]*redis.PubSub
-	addDispatcherChan chan *MultiRedisMessageDispatcher
-	delDispatcherChan chan *MultiRedisMessageDispatcher
-	dispatcherList    []*MultiRedisMessageDispatcher
+	addDispatcherChan chan *MultiChannelDispatcher
+	delDispatcherChan chan *MultiChannelDispatcher
+	dispatcherList    []*MultiChannelDispatcher
 	mu                sync.Mutex
 
 	subChannelsLen int64
@@ -155,18 +155,18 @@ type MultiRedisMessageDispatcherPool struct {
 	breakCount     int64
 }
 
-func NewMultiRedisMessageDispatcherPool(ctx context.Context, redisClient *redis.Client) (mdp *MultiRedisMessageDispatcherPool) {
+func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Client) (mdp *MultiChannelDispatcherPool) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	mdp = &MultiRedisMessageDispatcherPool{
+	mdp = &MultiChannelDispatcherPool{
 		ctx:               ctx,
 		redisClient:       redisClient,
 		subChannels:       make(map[string]int64),
 		redisSubMap:       make(map[string]*redis.PubSub),
-		addDispatcherChan: make(chan *MultiRedisMessageDispatcher, 100),
-		delDispatcherChan: make(chan *MultiRedisMessageDispatcher, 100),
-		dispatcherList:    make([]*MultiRedisMessageDispatcher, 0),
+		addDispatcherChan: make(chan *MultiChannelDispatcher, 100),
+		delDispatcherChan: make(chan *MultiChannelDispatcher, 100),
+		dispatcherList:    make([]*MultiChannelDispatcher, 0),
 		mu:                sync.Mutex{},
 	}
 
@@ -176,7 +176,7 @@ func NewMultiRedisMessageDispatcherPool(ctx context.Context, redisClient *redis.
 	return mdp
 }
 
-func (mdp *MultiRedisMessageDispatcherPool) PrintLength(duration time.Duration) {
+func (mdp *MultiChannelDispatcherPool) PrintLength(duration time.Duration) {
 	timer := time.NewTicker(duration)
 	go func() {
 		for {
@@ -184,14 +184,14 @@ func (mdp *MultiRedisMessageDispatcherPool) PrintLength(duration time.Duration) 
 			case <-mdp.ctx.Done():
 				return
 			case <-timer.C:
-				log.Printf("pubsubDispatcher:MultiRedisMessageDispatcherPool:PrintLength subChannelsLen: %d, redisChanListLen: %d", mdp.subChannelsLen, len(mdp.dispatcherList))
-				log.Printf("pubsubDispatcher:MultiRedisMessageDispatcherPool:PrintLength SubCount: %d, UnsubCount: %d, ConnectCount: %+d, BreakCount: %+d", mdp.subCount, mdp.unsubCount, mdp.connectCount, mdp.breakCount)
+				log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:PrintLength subChannelsLen: %d, redisChanListLen: %d", mdp.subChannelsLen, len(mdp.dispatcherList))
+				log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:PrintLength SubCount: %d, UnsubCount: %d, ConnectCount: %+d, BreakCount: %+d", mdp.subCount, mdp.unsubCount, mdp.connectCount, mdp.breakCount)
 			}
 		}
 	}()
 }
 
-func (mdp *MultiRedisMessageDispatcherPool) dealSubscribeRequest() {
+func (mdp *MultiChannelDispatcherPool) dealSubscribeRequest() {
 	for {
 		select {
 		case <-mdp.ctx.Done():
@@ -219,7 +219,7 @@ func (mdp *MultiRedisMessageDispatcherPool) dealSubscribeRequest() {
 						mdp.subChannelsLen--
 						if sub, ok := mdp.redisSubMap[channel]; ok {
 							if err := sub.Close(); err != nil {
-								log.Printf("pubsubDispatcher:MultiRedisMessageDispatcherPool:dealSubscribeRequest close redis sub err: %s", err)
+								log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:dealSubscribeRequest close redis sub err: %s", err)
 							}
 						}
 					}
@@ -229,7 +229,7 @@ func (mdp *MultiRedisMessageDispatcherPool) dealSubscribeRequest() {
 	}
 }
 
-func (mdp *MultiRedisMessageDispatcherPool) receiveAndPushByChannel(sub *redis.PubSub, channel string) {
+func (mdp *MultiChannelDispatcherPool) receiveAndPushByChannel(sub *redis.PubSub, channel string) {
 	if strings.Contains(channel, "*") || strings.Contains(channel, "?") {
 		_ = sub.PSubscribe(mdp.ctx, channel)
 	} else {
@@ -251,15 +251,15 @@ func (mdp *MultiRedisMessageDispatcherPool) receiveAndPushByChannel(sub *redis.P
 	}
 }
 
-func (mdp *MultiRedisMessageDispatcherPool) AddDispatcher(dispatcher *MultiRedisMessageDispatcher) {
+func (mdp *MultiChannelDispatcherPool) AddDispatcher(dispatcher *MultiChannelDispatcher) {
 	mdp.addDispatcherChan <- dispatcher
 }
 
-func (mdp *MultiRedisMessageDispatcherPool) DelDispatcher(dispatcher *MultiRedisMessageDispatcher) {
+func (mdp *MultiChannelDispatcherPool) DelDispatcher(dispatcher *MultiChannelDispatcher) {
 	mdp.delDispatcherChan <- dispatcher
 }
 
-func (mdp *MultiRedisMessageDispatcherPool) dealDispatcherRequest() {
+func (mdp *MultiChannelDispatcherPool) dealDispatcherRequest() {
 	for {
 		select {
 		case <-mdp.ctx.Done():

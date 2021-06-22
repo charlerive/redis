@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func TestSingleRedisMessageDispatcher(t *testing.T) {
+func TestSingleChannelDispatcher(t *testing.T) {
 	var cpuProfile = flag.String("cpuprofile", "single_pprof.prof", "write cpu profile to file")
 	flag.Parse()
 	if *cpuProfile != "" {
@@ -31,19 +31,19 @@ func TestSingleRedisMessageDispatcher(t *testing.T) {
 		DialTimeout: time.Second * 5,
 	})
 	// register dispatcher pool
-	dp, err := RegisterSingleRedisDispatcherPool("default", redisCli, "test_channel:*")
+	dp, err := RegisterSingleChannelDispatcherPool("default", redisCli, "test_channel:*")
 	if err != nil {
-		t.Fatalf("RegisterSingleRedisDispatcherPool err: %s", err)
+		t.Fatalf("RegisterSingleChannelDispatcherPool err: %s", err)
 	}
 	// get dispatcher pool
-	dp, err = GetSingleRedisDispatcherPool("default")
+	dp, err = GetSingleChannelDispatcherPool("default")
 	if err != nil {
-		t.Fatalf("GetSingleRedisDispatcherPool err: %s", err)
+		t.Fatalf("GetSingleChannelDispatcherPool err: %s", err)
 	}
 
 	wg := sync.WaitGroup{}
 
-	p1 := &SingleRedisMessageDispatcher{}
+	p1 := &SingleChannelDispatcher{}
 	p1.Init("test_channel:1")
 	dp.AddDispatcher(p1)
 	go func() {
@@ -64,7 +64,7 @@ func TestSingleRedisMessageDispatcher(t *testing.T) {
 		}
 	}()
 
-	p2 := &SingleRedisMessageDispatcher{}
+	p2 := &SingleChannelDispatcher{}
 	p2.Init("test_channel:2")
 	dp.AddDispatcher(p2)
 	go func() {
@@ -85,7 +85,7 @@ func TestSingleRedisMessageDispatcher(t *testing.T) {
 		}
 	}()
 
-	p3 := &SingleRedisMessageDispatcher{}
+	p3 := &SingleChannelDispatcher{}
 	p3.Init("test_channel:3")
 	dp.AddDispatcher(p3)
 	go func() {
@@ -106,7 +106,7 @@ func TestSingleRedisMessageDispatcher(t *testing.T) {
 		}
 	}()
 
-	p4 := &SingleRedisMessageDispatcher{}
+	p4 := &SingleChannelDispatcher{}
 	p4.Init("test_channel:4")
 	dp.AddDispatcher(p4)
 	go func() {
@@ -146,7 +146,7 @@ func TestSingleRedisMessageDispatcher(t *testing.T) {
 	wg.Wait()
 }
 
-func TestMultiRedisMessageDispatcher(t *testing.T) {
+func TestMultiChannelDispatcher(t *testing.T) {
 	var cpuProfile = flag.String("cpuprofile", "multi_pprof.prof", "write cpu profile to file")
 	flag.Parse()
 	if *cpuProfile != "" {
@@ -167,10 +167,10 @@ func TestMultiRedisMessageDispatcher(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 
-	mdp := NewMultiRedisMessageDispatcherPool(context.Background(), redisCli)
+	mdp := NewMultiChannelDispatcherPool(context.Background(), redisCli)
 	//mdp.PrintLength(time.Millisecond * 100)
 
-	md1 := &MultiRedisMessageDispatcher{}
+	md1 := &MultiChannelDispatcher{}
 	md1.Init()
 	mdp.AddDispatcher(md1)
 	md1.Subscribe([]string{"test_channel:1", "test_channel:2", "test_channel:3", "test_channel:4", "test_channel:5", "test_channel:6"}...)
@@ -193,7 +193,7 @@ func TestMultiRedisMessageDispatcher(t *testing.T) {
 		}
 	}()
 
-	md2 := &MultiRedisMessageDispatcher{}
+	md2 := &MultiChannelDispatcher{}
 	md2.Init()
 	mdp.AddDispatcher(md2)
 	md2.Subscribe([]string{"test_channel:2", "test_channel:3"}...)
@@ -215,7 +215,7 @@ func TestMultiRedisMessageDispatcher(t *testing.T) {
 		}
 	}()
 
-	md3 := &MultiRedisMessageDispatcher{}
+	md3 := &MultiChannelDispatcher{}
 	md3.Init()
 	mdp.AddDispatcher(md3)
 	md3.Subscribe([]string{"test_channel:3", "test_channel:4"}...)
@@ -237,7 +237,7 @@ func TestMultiRedisMessageDispatcher(t *testing.T) {
 		}
 	}()
 
-	md4 := &MultiRedisMessageDispatcher{}
+	md4 := &MultiChannelDispatcher{}
 	md4.Init()
 	mdp.AddDispatcher(md4)
 	md4.Subscribe([]string{"test_channel:4", "test_channel:5"}...)
@@ -259,7 +259,7 @@ func TestMultiRedisMessageDispatcher(t *testing.T) {
 		}
 	}()
 
-	md5 := &MultiRedisMessageDispatcher{}
+	md5 := &MultiChannelDispatcher{}
 	md5.Init()
 	mdp.AddDispatcher(md5)
 	md5.Subscribe([]string{"test_channel:4", "test_channel:5", "test_channel:6"}...)
@@ -284,7 +284,7 @@ func TestMultiRedisMessageDispatcher(t *testing.T) {
 	md1.Unsubscribe("test_channel:1")
 	md1.PSubscribe("test_channel:1*")
 
-	// sleep for MultiRedisMessageDispatcher add
+	// sleep for MultiChannelDispatcher add
 	time.Sleep(time.Second)
 
 	for i := 0; i < 100000; i++ {
