@@ -167,7 +167,12 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 
-	mdp := NewMultiChannelDispatcherPool(context.Background(), redisCli, DispatcherModeMultiConn)
+	mdp, err := RegisterMultiChannelDispatcherPool("aa", redisCli, DispatcherModeMultiConn)
+	if err != nil {
+		t.Fatalf("RegisterMultiChannelDispatcherPool err: %s", err)
+	}
+	mdp, _ = GetMultiChannelDispatcherPool("aa")
+	//mdp := NewMultiChannelDispatcherPool(context.Background(), redisCli, DispatcherModeMultiConn)
 	//mdp.PrintLength(time.Millisecond * 100)
 
 	md1 := &MultiChannelDispatcher{}
