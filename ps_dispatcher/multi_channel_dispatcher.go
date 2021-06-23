@@ -3,12 +3,42 @@ package ps_dispatcher
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/go-redis/redis/v8"
 	"log"
 	"strings"
 	"sync"
 	"time"
 )
+
+var (
+	multiDispatcherMap = sync.Map{} //make(map[string]*SingleChannelDispatcherPool)
+)
+
+func GetMultiChannelDispatcherPool(alias string) (*MultiChannelDispatcherPool, error) {
+	if dispatchLoad, ok := multiDispatcherMap.Load(alias); ok && dispatchLoad.(*MultiChannelDispatcherPool).ctx != nil {
+		return dispatchLoad.(*MultiChannelDispatcherPool), nil
+	}
+	return nil, fmt.Errorf("pubsubDispatcher:GetMultiChannelDispatcherPool dispatcher not fund")
+}
+
+func RegisterMultiChannelDispatcherPool(alias string, redisClient *redis.Client, mode dispatcherMode) (mdp *MultiChannelDispatcherPool, err error) {
+	if _, ok := multiDispatcherMap.Load(alias); ok {
+		return nil, fmt.Errorf("pubsubDispatcher:RegisterMultiChannelDispatcherPool fail. alias: %s has allready used. ", alias)
+	}
+	multiDispatcherMap.Store(alias, &MultiChannelDispatcherPool{})
+	defer func() {
+		if err != nil {
+			multiDispatcherMap.Delete(alias)
+		}
+		if dispatcherLoad, ok := multiDispatcherMap.Load(alias); !ok || dispatcherLoad.(*MultiChannelDispatcherPool).ctx == nil {
+			multiDispatcherMap.Delete(alias)
+		}
+	}()
+	mdp = NewMultiChannelDispatcherPool(context.Background(), redisClient, mode)
+	multiDispatcherMap.Store(alias, mdp)
+	return mdp, nil
+}
 
 type MultiChannelDispatcher struct {
 	mu             sync.RWMutex
