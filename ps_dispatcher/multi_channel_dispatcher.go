@@ -145,7 +145,6 @@ type MultiChannelDispatcherPool struct {
 	addDispatcherChan chan *MultiChannelDispatcher
 	delDispatcherChan chan *MultiChannelDispatcher
 	dispatcherList    []*MultiChannelDispatcher
-	mu                sync.Mutex
 	subChannelChan    chan string
 	unsubChannelChan  chan string
 
@@ -174,7 +173,6 @@ func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Clien
 		addDispatcherChan: make(chan *MultiChannelDispatcher, 100),
 		delDispatcherChan: make(chan *MultiChannelDispatcher, 100),
 		dispatcherList:    make([]*MultiChannelDispatcher, 0),
-		mu:                sync.Mutex{},
 		subChannelChan:    make(chan string, 2000),
 		unsubChannelChan:  make(chan string, 2000),
 	}
