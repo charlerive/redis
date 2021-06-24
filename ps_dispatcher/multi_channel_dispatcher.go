@@ -76,6 +76,19 @@ func (md *MultiChannelDispatcher) String() string {
 	return channels[:len(channels)-1]
 }
 
+func (md *MultiChannelDispatcher) Channels() []string {
+	channels := make([]string, 0)
+	md.subChannels.Range(func(channel, _ interface{}) bool {
+		channels = append(channels, channel.(string))
+		return true
+	})
+	md.subPatterns.Range(func(pattern, _ interface{}) bool {
+		channels = append(channels, pattern.(string))
+		return true
+	})
+	return channels
+}
+
 func (md *MultiChannelDispatcher) Subscribe(channels ...string) {
 	for k, channel := range channels {
 		if _, ok := md.subChannels.Load(channel); ok {
