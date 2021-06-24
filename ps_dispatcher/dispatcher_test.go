@@ -177,7 +177,6 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 
 	md1 := &MultiChannelDispatcher{}
 	md1.Init(mdp)
-	mdp.AddDispatcher(md1)
 	md1.Subscribe([]string{"test_channel:1", "test_channel:2", "test_channel:3", "test_channel:4", "test_channel:5", "test_channel:6"}...)
 	//log.Printf("channel: %s", md1.String())
 	//md1.Subscribe([]string{"test_channel:1", "test_channel:2"}...)
@@ -200,7 +199,6 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 
 	md2 := &MultiChannelDispatcher{}
 	md2.Init(mdp)
-	mdp.AddDispatcher(md2)
 	md2.Subscribe([]string{"test_channel:2", "test_channel:3"}...)
 	//md2.Subscribe([]string{"test_channel:1", "test_channel:2"}...)
 	go func() {
@@ -222,7 +220,6 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 
 	md3 := &MultiChannelDispatcher{}
 	md3.Init(mdp)
-	mdp.AddDispatcher(md3)
 	md3.Subscribe([]string{"test_channel:3", "test_channel:4"}...)
 	//md3.Subscribe([]string{"test_channel:1", "test_channel:2"}...)
 	go func() {
@@ -244,7 +241,6 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 
 	md4 := &MultiChannelDispatcher{}
 	md4.Init(mdp)
-	mdp.AddDispatcher(md4)
 	md4.Subscribe([]string{"test_channel:4", "test_channel:5"}...)
 	//md4.Subscribe([]string{"test_channel:1", "test_channel:2"}...)
 	go func() {
@@ -266,7 +262,6 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 
 	md5 := &MultiChannelDispatcher{}
 	md5.Init(mdp)
-	mdp.AddDispatcher(md5)
 	md5.Subscribe([]string{"test_channel:4", "test_channel:5", "test_channel:6"}...)
 	//md5.Subscribe([]string{"test_channel:1", "test_channel:2"}...)
 	go func() {

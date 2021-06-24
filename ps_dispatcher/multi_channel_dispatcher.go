@@ -54,6 +54,7 @@ func (md *MultiChannelDispatcher) Init(mdp *MultiChannelDispatcherPool) {
 	md.subChannels = sync.Map{}
 	md.subPatterns = sync.Map{}
 	md.mdp = mdp
+	mdp.AddDispatcher(md)
 }
 
 func (md *MultiChannelDispatcher) Channel() chan *redis.Message {
@@ -159,6 +160,7 @@ func (md *MultiChannelDispatcher) Close() {
 		md.subPatterns.Delete(pattern)
 		return true
 	})
+	md.mdp.DelDispatcher(md)
 	close(md.pubChannel)
 }
 
@@ -292,8 +294,8 @@ func (mdp *MultiChannelDispatcherPool) dealSubscribeRequestAndReceive() {
 			if !ok {
 				continue
 			}
-			for _, redisChan := range mdp.dispatcherList {
-				redisChan.pub(msg)
+			for _, dispatcher := range mdp.dispatcherList {
+				dispatcher.pub(msg)
 			}
 		}
 	}
@@ -353,8 +355,8 @@ func (mdp *MultiChannelDispatcherPool) receiveAndPushByChannel(sub *redis.PubSub
 			if !ok {
 				return
 			}
-			for _, redisChan := range mdp.dispatcherList {
-				redisChan.pub(msg)
+			for _, dispatcher := range mdp.dispatcherList {
+				dispatcher.pub(msg)
 			}
 		}
 	}
