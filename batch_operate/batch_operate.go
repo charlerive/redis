@@ -12,10 +12,11 @@ const (
 	Set   OpType = 1
 	HSet  OpType = 2
 	HMSet OpType = 3
-	Pub   OpType = 4
-	LPush OpType = 5
-	RPush OpType = 6
-	Exp   OpType = 7
+	HDel  OpType = 4
+	Pub   OpType = 5
+	LPush OpType = 6
+	RPush OpType = 7
+	Exp   OpType = 8
 )
 
 type Operate struct {
@@ -78,6 +79,9 @@ func (bo *BatchOperate) Start() {
 			case HMSet:
 				values := op.Args.([]interface{})
 				pipe.HMSet(bo.ctx, op.Key, values...)
+			case HDel:
+				values := op.Args.([]string)
+				pipe.HDel(bo.ctx, op.Key, values...)
 			case Pub:
 				pipe.Publish(bo.ctx, op.Key, op.Args)
 			case LPush:
@@ -120,6 +124,15 @@ func (bo *BatchOperate) HSet(key string, values ...interface{}) {
 func (bo *BatchOperate) HMSet(key string, values ...interface{}) {
 	op := &Operate{
 		OpType: HMSet,
+		Key:    key,
+		Args:   values,
+	}
+	bo.batchChan <- op
+}
+
+func (bo *BatchOperate) HDel(key string, values ...string) {
+	op := &Operate{
+		OpType: HDel,
 		Key:    key,
 		Args:   values,
 	}
