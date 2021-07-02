@@ -174,6 +174,9 @@ func (p *SingleChannelDispatcherPool) dealDispatcherRequestAndReceive() {
 					}
 				}
 				dispatcher.Close()
+				if len(p.dispatcherMap[subChannel]) == 0 {
+					delete(p.dispatcherMap, subChannel)
+				}
 			}
 		case msg := <-p.redisChan:
 			if msg == nil {
