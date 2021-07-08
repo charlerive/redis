@@ -387,7 +387,11 @@ func (mdp *MultiChannelDispatcherPool) dealDispatcherRequest() {
 				mdp.breakCount++
 				for key, dp := range mdp.dispatcherList {
 					if dp == dispatcher {
-						mdp.dispatcherList = append(mdp.dispatcherList[0:key], mdp.dispatcherList[key+1:]...)
+						if key+1 < len(mdp.dispatcherList) {
+							mdp.dispatcherList = append(mdp.dispatcherList[0:key], mdp.dispatcherList[key+1:]...)
+						} else {
+							mdp.dispatcherList = mdp.dispatcherList[0:key]
+						}
 						break
 					}
 				}
