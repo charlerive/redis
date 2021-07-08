@@ -17,6 +17,7 @@ const (
 	LPush OpType = 6
 	RPush OpType = 7
 	Exp   OpType = 8
+	Del   OpType = 9
 )
 
 type Operate struct {
@@ -92,6 +93,8 @@ func (bo *BatchOperate) Start() {
 				pipe.RPush(bo.ctx, op.Key, values...)
 			case Exp:
 				pipe.Expire(bo.ctx, op.Key, op.ExpTime)
+			case Del:
+				pipe.Del(bo.ctx, op.Key)
 			}
 			if cacheLen >= bo.maxLen {
 				_, _ = pipe.Exec(bo.ctx)
@@ -171,6 +174,14 @@ func (bo *BatchOperate) Expire(key string, expiration time.Duration) {
 		OpType:  Exp,
 		Key:     key,
 		ExpTime: expiration,
+	}
+	bo.batchChan <- op
+}
+
+func (bo *BatchOperate) Del(key string) {
+	op := &Operate{
+		OpType: Del,
+		Key:    key,
 	}
 	bo.batchChan <- op
 }
