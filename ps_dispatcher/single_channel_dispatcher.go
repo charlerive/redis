@@ -106,7 +106,6 @@ func NewSingleChannelDispatcherPool(ctx context.Context, subscribe *redis.PubSub
 		redisChan: redisChan,
 	}
 	pool.dispatcherMap = make(map[string][]*SingleChannelDispatcher)
-	pool.pubChannel = make(chan *redis.Message, 80)
 	pool.addDispatcherChan = make(chan *SingleChannelDispatcher, 500)
 	pool.delDispatcherChan = make(chan *SingleChannelDispatcher, 500)
 
@@ -120,16 +119,9 @@ type SingleChannelDispatcherPool struct {
 	ctx               context.Context
 	subscribe         *redis.PubSub
 	redisChan         <-chan *redis.Message
-	needPub           bool
-	pubChannel        chan *redis.Message
 	addDispatcherChan chan *SingleChannelDispatcher
 	delDispatcherChan chan *SingleChannelDispatcher
 	dispatcherMap     map[string][]*SingleChannelDispatcher
-}
-
-func (p *SingleChannelDispatcherPool) Channel() <-chan *redis.Message {
-	p.needPub = true
-	return p.pubChannel
 }
 
 func (p *SingleChannelDispatcherPool) Subscribe() *redis.PubSub {
@@ -150,7 +142,6 @@ func (p *SingleChannelDispatcherPool) dealDispatcherRequestAndReceive() {
 		case <-p.ctx.Done():
 			close(p.delDispatcherChan)
 			close(p.addDispatcherChan)
-			close(p.pubChannel)
 			return
 		case dispatcher := <-p.addDispatcherChan:
 			if dispatcher == nil {
@@ -186,7 +177,6 @@ func (p *SingleChannelDispatcherPool) dealDispatcherRequestAndReceive() {
 			if msg == nil {
 				continue
 			}
-			p.pub(msg)
 			// 分发到其他订阅组
 			dispatcherList, ok := p.dispatcherMap[msg.Channel]
 			if ok {
@@ -195,16 +185,5 @@ func (p *SingleChannelDispatcherPool) dealDispatcherRequestAndReceive() {
 				}
 			}
 		}
-	}
-}
-
-func (p *SingleChannelDispatcherPool) pub(msg *redis.Message) {
-	if !p.needPub {
-		return
-	}
-	if len(p.pubChannel) < 60 {
-		p.pubChannel <- msg
-	} else {
-		log.Printf("pubsubDispatcher:SingleChannelDispatcherPool:pub len(p.pubChannel) is more than 60, message drop. message: %+v", msg)
 	}
 }
