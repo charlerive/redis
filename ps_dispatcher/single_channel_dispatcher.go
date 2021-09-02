@@ -161,11 +161,7 @@ func (p *SingleChannelDispatcherPool) dealDispatcherRequestAndReceive() {
 			if dispatcherList, ok := p.dispatcherMap[subChannel]; ok {
 				for key, d := range dispatcherList {
 					if d == dispatcher {
-						if key+1 < len(dispatcherList) {
-							p.dispatcherMap[subChannel] = append(p.dispatcherMap[subChannel][0:key], p.dispatcherMap[subChannel][key+1:]...)
-						} else {
-							p.dispatcherMap[subChannel] = p.dispatcherMap[subChannel][0:key]
-						}
+						p.dispatcherMap[subChannel] = append(p.dispatcherMap[subChannel][0:key], p.dispatcherMap[subChannel][key+1:]...)
 					}
 				}
 				dispatcher.Close()

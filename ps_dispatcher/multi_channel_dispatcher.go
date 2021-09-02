@@ -45,6 +45,7 @@ type MultiChannelDispatcher struct {
 	pubChannel     chan *redis.Message
 	subChannels    sync.Map // map[string]struct{}
 	subPatterns    sync.Map // map[string]struct{}
+	subChannelsLen int
 	subPatternsLen int
 	mdp            *MultiChannelDispatcherPool
 }
@@ -90,13 +91,23 @@ func (md *MultiChannelDispatcher) Channels() []string {
 	return channels
 }
 
+func (md *MultiChannelDispatcher) ChannelsSize() int {
+	return md.subChannelsLen
+}
+
+func (md *MultiChannelDispatcher) PatternsSize() int {
+	return md.subPatternsLen
+}
+
 func (md *MultiChannelDispatcher) Subscribe(channels ...string) {
-	for k, channel := range channels {
-		if _, ok := md.subChannels.Load(channel); ok {
+	for k := 0; k < len(channels); k++ {
+		if _, ok := md.subChannels.Load(channels[k]); ok {
 			channels = append(channels[0:k], channels[k+1:]...)
+			k--
 			continue
 		}
-		md.subChannels.Store(channel, struct{}{})
+		md.subChannelsLen++
+		md.subChannels.Store(channels[k], struct{}{})
 	}
 
 	for _, s := range channels {
@@ -105,12 +116,14 @@ func (md *MultiChannelDispatcher) Subscribe(channels ...string) {
 }
 
 func (md *MultiChannelDispatcher) Unsubscribe(channels ...string) {
-	for k, channel := range channels {
-		if _, ok := md.subChannels.Load(channel); !ok {
+	for k := 0; k < len(channels); k++ {
+		if _, ok := md.subChannels.Load(channels[k]); !ok {
 			channels = append(channels[0:k], channels[k+1:]...)
+			k--
 			continue
 		}
-		md.subChannels.Delete(channel)
+		md.subChannelsLen--
+		md.subChannels.Delete(channels[k])
 	}
 
 	for _, s := range channels {
@@ -119,13 +132,14 @@ func (md *MultiChannelDispatcher) Unsubscribe(channels ...string) {
 }
 
 func (md *MultiChannelDispatcher) PSubscribe(patterns ...string) {
-	for k, pattern := range patterns {
-		if _, ok := md.subPatterns.Load(pattern); ok {
+	for k := 0; k < len(patterns); k++ {
+		if _, ok := md.subPatterns.Load(patterns[k]); ok {
 			patterns = append(patterns[0:k], patterns[k+1:]...)
+			k--
 			continue
 		}
 		md.subPatternsLen++
-		md.subPatterns.Store(pattern, struct{}{})
+		md.subPatterns.Store(patterns[k], struct{}{})
 	}
 
 	for _, p := range patterns {
@@ -134,13 +148,13 @@ func (md *MultiChannelDispatcher) PSubscribe(patterns ...string) {
 }
 
 func (md *MultiChannelDispatcher) PUnsubscribe(patterns ...string) {
-	for k, pattern := range patterns {
-		if _, ok := md.subPatterns.Load(pattern); !ok {
+	for k := 0; k < len(patterns); k++ {
+		if _, ok := md.subPatterns.Load(patterns[k]); !ok {
 			patterns = append(patterns[0:k], patterns[k+1:]...)
 			continue
 		}
 		md.subPatternsLen--
-		md.subPatterns.Delete(pattern)
+		md.subPatterns.Delete(patterns[k])
 	}
 
 	for _, p := range patterns {
@@ -387,11 +401,7 @@ func (mdp *MultiChannelDispatcherPool) dealDispatcherRequest() {
 				mdp.breakCount++
 				for key, dp := range mdp.dispatcherList {
 					if dp == dispatcher {
-						if key+1 < len(mdp.dispatcherList) {
-							mdp.dispatcherList = append(mdp.dispatcherList[0:key], mdp.dispatcherList[key+1:]...)
-						} else {
-							mdp.dispatcherList = mdp.dispatcherList[0:key]
-						}
+						mdp.dispatcherList = append(mdp.dispatcherList[0:key], mdp.dispatcherList[key+1:]...)
 						break
 					}
 				}
