@@ -65,19 +65,19 @@ func RegisterSingleChannelDispatcherPool(alias string, redisCli *redis.Client, s
 	return dp, nil
 }
 
-// redis转发器-单通道
+// SingleChannelDispatcher redis转发器-单通道
 type SingleChannelDispatcher struct {
 	isClose    bool
 	subChannel string
-	pubChannel chan *redis.Message
+	pubChannel chan interface{}
 }
 
 func (rd *SingleChannelDispatcher) Init(subChannel string) {
 	rd.subChannel = subChannel
-	rd.pubChannel = make(chan *redis.Message, 100)
+	rd.pubChannel = make(chan interface{}, 100)
 }
 
-func (rd *SingleChannelDispatcher) Channel() chan *redis.Message {
+func (rd *SingleChannelDispatcher) Channel() chan interface{} {
 	return rd.pubChannel
 }
 
@@ -90,7 +90,7 @@ func (rd *SingleChannelDispatcher) Close() {
 	close(rd.pubChannel)
 }
 
-func (rd *SingleChannelDispatcher) pub(msg *redis.Message) {
+func (rd *SingleChannelDispatcher) pub(msg interface{}) {
 	if !rd.isClose && len(rd.pubChannel) < 90 {
 		rd.pubChannel <- msg
 	}
@@ -114,7 +114,7 @@ func NewSingleChannelDispatcherPool(ctx context.Context, subscribe *redis.PubSub
 	return pool
 }
 
-// redis转发器池-单通道
+// SingleChannelDispatcherPool redis转发器池-单通道
 type SingleChannelDispatcherPool struct {
 	ctx               context.Context
 	subscribe         *redis.PubSub
@@ -122,6 +122,13 @@ type SingleChannelDispatcherPool struct {
 	addDispatcherChan chan *SingleChannelDispatcher
 	delDispatcherChan chan *SingleChannelDispatcher
 	dispatcherMap     map[string][]*SingleChannelDispatcher
+	f                 ProcessFunc
+}
+
+func (p *SingleChannelDispatcherPool) AddProcessFunc(f ProcessFunc) {
+	if f != nil {
+		p.f = f
+	}
 }
 
 func (p *SingleChannelDispatcherPool) Subscribe() *redis.PubSub {
@@ -137,6 +144,10 @@ func (p *SingleChannelDispatcherPool) DelDispatcher(dispatcher *SingleChannelDis
 }
 
 func (p *SingleChannelDispatcherPool) dealDispatcherRequestAndReceive() {
+	var (
+		receiveData interface{}
+		err         error
+	)
 	for {
 		select {
 		case <-p.ctx.Done():
@@ -176,8 +187,16 @@ func (p *SingleChannelDispatcherPool) dealDispatcherRequestAndReceive() {
 			// 分发到其他订阅组
 			dispatcherList, ok := p.dispatcherMap[msg.Channel]
 			if ok {
+				receiveData = msg
+				if p.f != nil {
+					receiveData, err = p.f(msg)
+					if err != nil {
+						log.Printf("SingleChannelDispatcherPool:dealDispatcherRequestAndReceive run processFunc fail, err: %s", err)
+						continue
+					}
+				}
 				for _, dispatcher := range dispatcherList {
-					dispatcher.pub(msg)
+					dispatcher.pub(receiveData)
 				}
 			}
 		}

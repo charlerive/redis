@@ -42,7 +42,7 @@ func RegisterMultiChannelDispatcherPool(alias string, redisClient *redis.Client,
 
 type MultiChannelDispatcher struct {
 	mu             sync.RWMutex
-	pubChannel     chan *redis.Message
+	pubChannel     chan interface{}
 	subChannels    sync.Map // map[string]struct{}
 	subPatterns    sync.Map // map[string]struct{}
 	subChannelsLen int
@@ -51,14 +51,14 @@ type MultiChannelDispatcher struct {
 }
 
 func (md *MultiChannelDispatcher) Init(mdp *MultiChannelDispatcherPool) {
-	md.pubChannel = make(chan *redis.Message, 100)
+	md.pubChannel = make(chan interface{}, 100)
 	md.subChannels = sync.Map{}
 	md.subPatterns = sync.Map{}
 	md.mdp = mdp
 	mdp.AddDispatcher(md)
 }
 
-func (md *MultiChannelDispatcher) Channel() chan *redis.Message {
+func (md *MultiChannelDispatcher) Channel() chan interface{} {
 	return md.pubChannel
 }
 
@@ -178,17 +178,17 @@ func (md *MultiChannelDispatcher) Close() {
 	close(md.pubChannel)
 }
 
-func (md *MultiChannelDispatcher) pub(msg *redis.Message) {
+func (md *MultiChannelDispatcher) pub(msg *redis.Message, receiveData interface{}) {
 	if msg.Pattern == "" {
 		if _, ok := md.subChannels.Load(msg.Channel); ok {
 			if len(md.pubChannel) < 90 {
-				md.pubChannel <- msg
+				md.pubChannel <- receiveData
 			}
 		}
 	} else if md.subPatternsLen > 0 {
 		if _, ok := md.subPatterns.Load(msg.Pattern); ok {
 			if len(md.pubChannel) < 90 {
-				md.pubChannel <- msg
+				md.pubChannel <- receiveData
 			}
 		}
 	}
@@ -206,6 +206,7 @@ type MultiChannelDispatcherPool struct {
 	dispatcherList    []*MultiChannelDispatcher
 	subChannelChan    chan string
 	unsubChannelChan  chan string
+	f                 ProcessFunc
 
 	subChannelsLen int64
 	subCount       int64
@@ -249,6 +250,12 @@ func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Clien
 	return mdp
 }
 
+func (mdp *MultiChannelDispatcherPool) AddProcessFunc(f ProcessFunc) {
+	if f != nil {
+		mdp.f = f
+	}
+}
+
 func (mdp *MultiChannelDispatcherPool) PrintLength(duration time.Duration) {
 	timer := time.NewTicker(duration)
 	go func() {
@@ -265,6 +272,10 @@ func (mdp *MultiChannelDispatcherPool) PrintLength(duration time.Duration) {
 }
 
 func (mdp *MultiChannelDispatcherPool) dealSubscribeRequestAndReceive() {
+	var (
+		receiveData interface{}
+		err         error
+	)
 	for {
 		select {
 		case <-mdp.ctx.Done():
@@ -308,8 +319,16 @@ func (mdp *MultiChannelDispatcherPool) dealSubscribeRequestAndReceive() {
 			if !ok {
 				continue
 			}
+			receiveData = msg
+			if mdp.f != nil {
+				receiveData, err = mdp.f(msg)
+				if err != nil {
+					log.Printf("MultiChannelDispatcherPool:dealSubscribeRequestAndReceive run processFunc fail, err: %s", err)
+					continue
+				}
+			}
 			for _, dispatcher := range mdp.dispatcherList {
-				dispatcher.pub(msg)
+				dispatcher.pub(msg, receiveData)
 			}
 		}
 	}
@@ -354,6 +373,10 @@ func (mdp *MultiChannelDispatcherPool) dealSubscribeRequest() {
 }
 
 func (mdp *MultiChannelDispatcherPool) receiveAndPushByChannel(sub *redis.PubSub, channel string) {
+	var (
+		receiveData interface{}
+		err         error
+	)
 	if strings.Contains(channel, "*") || strings.Contains(channel, "?") {
 		_ = sub.PSubscribe(mdp.ctx, channel)
 	} else {
@@ -369,8 +392,16 @@ func (mdp *MultiChannelDispatcherPool) receiveAndPushByChannel(sub *redis.PubSub
 			if !ok {
 				return
 			}
+			receiveData = msg
+			if mdp.f != nil {
+				receiveData, err = mdp.f(msg)
+				if err != nil {
+					log.Printf("MultiChannelDispatcherPool:receiveAndPushByChannel run processFunc fail, err: %s", err)
+					continue
+				}
+			}
 			for _, dispatcher := range mdp.dispatcherList {
-				dispatcher.pub(msg)
+				dispatcher.pub(msg, receiveData)
 			}
 		}
 	}
