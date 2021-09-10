@@ -60,7 +60,7 @@ func (bo *BatchOperate) Start() {
 		select {
 		case <-bo.ctx.Done():
 			if cacheLen > 0 {
-				_, _ = pipe.Exec(bo.ctx)
+				_, _ = pipe.Exec(context.Background())
 			}
 			return
 		case <-bo.ticker.C:
