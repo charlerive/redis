@@ -18,6 +18,8 @@ const (
 	RPush OpType = 7
 	Exp   OpType = 8
 	Del   OpType = 9
+	ZAdd  OpType = 10
+	ZRem  OpType = 11
 )
 
 type Operate struct {
@@ -95,6 +97,16 @@ func (bo *BatchOperate) Start() {
 				pipe.Expire(bo.ctx, op.Key, op.ExpTime)
 			case Del:
 				pipe.Del(bo.ctx, op.Key)
+			case ZAdd:
+				values := op.Args.([]interface{})
+				if len(values) == 2 {
+					if f, ok := values[0].(float64); ok {
+						pipe.ZAdd(bo.ctx, op.Key, &redis.Z{Score: f, Member: values[1]})
+					}
+				}
+			case ZRem:
+				values := op.Args.([]interface{})
+				pipe.ZRem(bo.ctx, op.Key, values...)
 			}
 			if cacheLen >= bo.maxLen {
 				_, _ = pipe.Exec(bo.ctx)
@@ -182,6 +194,24 @@ func (bo *BatchOperate) Del(key string) {
 	op := &Operate{
 		OpType: Del,
 		Key:    key,
+	}
+	bo.batchChan <- op
+}
+
+func (bo *BatchOperate) ZAdd(key string, member interface{}, score interface{}) {
+	op := &Operate{
+		OpType: ZAdd,
+		Key:    key,
+		Args:   []interface{}{score, member},
+	}
+	bo.batchChan <- op
+}
+
+func (bo *BatchOperate) ZRem(key string, member ...interface{}) {
+	op := &Operate{
+		OpType: ZRem,
+		Key:    key,
+		Args:   member,
 	}
 	bo.batchChan <- op
 }
