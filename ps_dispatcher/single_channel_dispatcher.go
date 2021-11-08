@@ -191,7 +191,7 @@ func (p *SingleChannelDispatcherPool) dealDispatcherRequestAndReceive() {
 				if p.f != nil {
 					receiveData, err = p.f(msg)
 					if err != nil {
-						log.Printf("SingleChannelDispatcherPool:dealDispatcherRequestAndReceive run processFunc fail, err: %s", err)
+						//log.Printf("SingleChannelDispatcherPool:dealDispatcherRequestAndReceive run processFunc fail, err: %s", err)
 						continue
 					}
 				}

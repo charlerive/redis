@@ -323,7 +323,7 @@ func (mdp *MultiChannelDispatcherPool) dealSubscribeRequestAndReceive() {
 			if mdp.f != nil {
 				receiveData, err = mdp.f(msg)
 				if err != nil {
-					log.Printf("MultiChannelDispatcherPool:dealSubscribeRequestAndReceive run processFunc fail, err: %s", err)
+					//log.Printf("MultiChannelDispatcherPool:dealSubscribeRequestAndReceive run processFunc fail, err: %s", err)
 					continue
 				}
 			}
@@ -396,7 +396,7 @@ func (mdp *MultiChannelDispatcherPool) receiveAndPushByChannel(sub *redis.PubSub
 			if mdp.f != nil {
 				receiveData, err = mdp.f(msg)
 				if err != nil {
-					log.Printf("MultiChannelDispatcherPool:receiveAndPushByChannel run processFunc fail, err: %s", err)
+					//log.Printf("MultiChannelDispatcherPool:receiveAndPushByChannel run processFunc fail, err: %s", err)
 					continue
 				}
 			}
