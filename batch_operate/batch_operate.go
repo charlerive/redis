@@ -68,7 +68,6 @@ func (bo *BatchOperate) Start() {
 		case <-bo.ticker.C:
 			if cacheLen > 0 {
 				_, _ = pipe.Exec(bo.ctx)
-				pipe = bo.redisCli.Pipeline()
 				cacheLen = 0
 			}
 		case op := <-bo.batchChan:
@@ -110,7 +109,6 @@ func (bo *BatchOperate) Start() {
 			}
 			if cacheLen >= bo.maxLen {
 				_, _ = pipe.Exec(bo.ctx)
-				pipe = bo.redisCli.Pipeline()
 				cacheLen = 0
 			}
 		}
