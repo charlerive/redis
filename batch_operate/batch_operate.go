@@ -199,7 +199,7 @@ func (bo *BatchOperate) Del(key string) {
 	bo.batchChan <- op
 }
 
-func (bo *BatchOperate) ZAdd(key string, member interface{}, score interface{}) {
+func (bo *BatchOperate) ZAdd(key string, member interface{}, score float64) {
 	op := &Operate{
 		OpType: ZAdd,
 		Key:    key,
