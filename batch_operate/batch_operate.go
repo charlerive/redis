@@ -52,7 +52,7 @@ func NewBatchOperate(ctx context.Context, redisCli *redis.Client, maxLen int, du
 		ticker:        time.NewTicker(duration),
 		maxLen:        maxLen,
 		redisCli:      redisCli,
-		commitChannel: make(chan struct{}),
+		commitChannel: make(chan struct{}, 100),
 		batchChan:     make(chan *Operate, 5000),
 		cacheLen:      0,
 	}
