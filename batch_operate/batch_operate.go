@@ -31,11 +31,13 @@ type Operate struct {
 }
 
 type BatchOperate struct {
-	ctx       context.Context
-	ticker    *time.Ticker
-	maxLen    int
-	redisCli  *redis.Client
-	batchChan chan *Operate
+	ctx           context.Context
+	ticker        *time.Ticker
+	maxLen        int
+	redisCli      *redis.Client
+	batchChan     chan *Operate
+	commitChannel chan struct{}
+	cacheLen      int
 }
 
 func NewBatchOperate(ctx context.Context, redisCli *redis.Client, maxLen int, duration time.Duration) *BatchOperate {
@@ -46,33 +48,40 @@ func NewBatchOperate(ctx context.Context, redisCli *redis.Client, maxLen int, du
 		maxLen = 1000
 	}
 	batchOperate := &BatchOperate{
-		ctx:       ctx,
-		ticker:    time.NewTicker(duration),
-		maxLen:    maxLen,
-		redisCli:  redisCli,
-		batchChan: make(chan *Operate, 5000),
+		ctx:           ctx,
+		ticker:        time.NewTicker(duration),
+		maxLen:        maxLen,
+		redisCli:      redisCli,
+		commitChannel: make(chan struct{}),
+		batchChan:     make(chan *Operate, 5000),
+		cacheLen:      0,
 	}
 	go batchOperate.Start()
 	return batchOperate
 }
 
 func (bo *BatchOperate) Start() {
-	cacheLen := 0
+	bo.cacheLen = 0
 	pipe := bo.redisCli.Pipeline()
 	for {
 		select {
 		case <-bo.ctx.Done():
-			if cacheLen > 0 {
+			if bo.cacheLen > 0 {
 				_, _ = pipe.Exec(context.Background())
 			}
 			return
 		case <-bo.ticker.C:
-			if cacheLen > 0 {
+			if bo.cacheLen > 0 {
 				_, _ = pipe.Exec(bo.ctx)
-				cacheLen = 0
+				bo.cacheLen = 0
+			}
+		case <-bo.commitChannel:
+			if bo.cacheLen > 0 {
+				_, _ = pipe.Exec(bo.ctx)
+				bo.cacheLen = 0
 			}
 		case op := <-bo.batchChan:
-			cacheLen++
+			bo.cacheLen++
 			switch op.OpType {
 			case Set:
 				pipe.Set(bo.ctx, op.Key, op.Args, op.ExpTime)
@@ -110,12 +119,16 @@ func (bo *BatchOperate) Start() {
 			case Incr:
 				pipe.IncrByFloat(bo.ctx, op.Key, op.Args.(float64))
 			}
-			if cacheLen >= bo.maxLen {
+			if bo.cacheLen >= bo.maxLen {
 				_, _ = pipe.Exec(bo.ctx)
-				cacheLen = 0
+				bo.cacheLen = 0
 			}
 		}
 	}
+}
+
+func (bo *BatchOperate) Commit() {
+	bo.commitChannel <- struct{}{}
 }
 
 func (bo *BatchOperate) Set(key string, value interface{}, expiration time.Duration) {
