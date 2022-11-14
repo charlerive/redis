@@ -69,6 +69,7 @@ func (bo *BatchOperate) Start() {
 			if bo.cacheLen > 0 {
 				_, _ = pipe.Exec(context.Background())
 			}
+			bo.ticker.Stop()
 			return
 		case <-bo.ticker.C:
 			if bo.cacheLen > 0 {
