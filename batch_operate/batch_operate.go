@@ -21,6 +21,8 @@ const (
 	ZAdd  OpType = 10
 	ZRem  OpType = 11
 	Incr  OpType = 12
+	SAdd  OpType = 13
+	SRem  OpType = 14
 )
 
 type Operate struct {
@@ -119,6 +121,12 @@ func (bo *BatchOperate) Start() {
 				pipe.ZRem(bo.ctx, op.Key, values...)
 			case Incr:
 				pipe.IncrByFloat(bo.ctx, op.Key, op.Args.(float64))
+			case SAdd:
+				values := op.Args.([]interface{})
+				pipe.SAdd(bo.ctx, op.Key, values...)
+			case SRem:
+				values := op.Args.([]interface{})
+				pipe.SRem(bo.ctx, op.Key, values...)
 			}
 			if bo.cacheLen >= bo.maxLen {
 				_, _ = pipe.Exec(bo.ctx)
@@ -236,6 +244,24 @@ func (bo *BatchOperate) Incr(key string, delta float64) {
 		OpType: Incr,
 		Key:    key,
 		Args:   delta,
+	}
+	bo.batchChan <- op
+}
+
+func (bo *BatchOperate) SAdd(key string, member ...interface{}) {
+	op := &Operate{
+		OpType: SAdd,
+		Key:    key,
+		Args:   member,
+	}
+	bo.batchChan <- op
+}
+
+func (bo *BatchOperate) SRem(key string, member ...interface{}) {
+	op := &Operate{
+		OpType: SRem,
+		Key:    key,
+		Args:   member,
 	}
 	bo.batchChan <- op
 }
