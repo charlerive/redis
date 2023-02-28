@@ -3,7 +3,6 @@ package ps_dispatcher
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"log"
@@ -208,7 +207,6 @@ type MultiChannelDispatcherPool struct {
 	subChannelChan    chan string
 	unsubChannelChan  chan string
 	f                 ProcessFunc
-	printTicker       *time.Ticker
 
 	subChannelsLen int64
 	subCount       int64
@@ -247,7 +245,6 @@ func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Clien
 		dispatcherList:    make([]*MultiChannelDispatcher, 0),
 		subChannelChan:    make(chan string, 2000),
 		unsubChannelChan:  make(chan string, 2000),
-		printTicker:       time.NewTicker(time.Hour),
 	}
 
 	if mode == DispatcherModeSingleConn {
@@ -270,7 +267,6 @@ func (mdp *MultiChannelDispatcherPool) AddProcessFunc(f ProcessFunc) {
 }
 
 func (mdp *MultiChannelDispatcherPool) PrintLength(duration time.Duration) {
-	mdp.printTicker.Reset(duration)
 	ticker := time.NewTicker(duration)
 	go func() {
 		for {
@@ -295,9 +291,6 @@ func (mdp *MultiChannelDispatcherPool) dealSingleModeSubscribeRequest() {
 			close(mdp.subChannelChan)
 			close(mdp.unsubChannelChan)
 			return
-		case <-mdp.printTicker.C:
-			str, _ := json.Marshal(mdp.subChannels)
-			log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:dealSingleModeSubscribeRequest mode: %s, mdp.subChannels lenth: %d, mdp.subChannels: %s", mdp.mode, len(mdp.subChannels), str)
 		case channel, ok := <-mdp.subChannelChan:
 			if ok {
 				mdp.subCount++
@@ -367,9 +360,6 @@ func (mdp *MultiChannelDispatcherPool) dealMultiModeSubscribeRequest() {
 		select {
 		case <-mdp.ctx.Done():
 			return
-		case <-mdp.printTicker.C:
-			str, _ := json.Marshal(mdp.subChannels)
-			log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:dealMultiModeSubscribeRequest mode: %s, mdp.subChannels lenth: %d, mdp.subChannels: %s", mdp.mode, len(mdp.subChannels), str)
 		case channel, ok := <-mdp.subChannelChan:
 			if ok {
 				mdp.subCount++
