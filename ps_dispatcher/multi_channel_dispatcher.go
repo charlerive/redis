@@ -247,6 +247,7 @@ func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Clien
 		dispatcherList:    make([]*MultiChannelDispatcher, 0),
 		subChannelChan:    make(chan string, 2000),
 		unsubChannelChan:  make(chan string, 2000),
+		printTicker:       time.NewTicker(time.Hour),
 	}
 
 	if mode == DispatcherModeSingleConn {
@@ -269,13 +270,14 @@ func (mdp *MultiChannelDispatcherPool) AddProcessFunc(f ProcessFunc) {
 }
 
 func (mdp *MultiChannelDispatcherPool) PrintLength(duration time.Duration) {
-	mdp.printTicker = time.NewTicker(duration)
+	mdp.printTicker.Reset(duration)
+	ticker := time.NewTicker(duration)
 	go func() {
 		for {
 			select {
 			case <-mdp.ctx.Done():
 				return
-			case <-mdp.printTicker.C:
+			case <-ticker.C:
 				log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:PrintLength mode: %s, subChannelsLen: %d, redisChanListLen: %d", mdp.mode, mdp.subChannelsLen, len(mdp.dispatcherList))
 				log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:PrintLength mode: %s, SubCount: %d, UnsubCount: %d, ConnectCount: %+d, BreakCount: %+d", mdp.mode, mdp.subCount, mdp.unsubCount, mdp.connectCount, mdp.breakCount)
 			}
