@@ -286,6 +286,7 @@ func (mdp *MultiChannelDispatcherPool) PrintLength(duration time.Duration) {
 }
 
 func (mdp *MultiChannelDispatcherPool) dealSingleModeSubscribeRequest() {
+	go mdp.receiveAndPush()
 	for {
 		select {
 		case <-mdp.ctx.Done():
