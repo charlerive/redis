@@ -252,10 +252,10 @@ func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Clien
 
 	if mode == DispatcherModeSingleConn {
 		mdp.redisSub = redisClient.Subscribe(ctx)
-		go mdp.dealSubscribeRequestAndReceive()
+		go mdp.dealSingleModeSubscribeRequest()
 	} else if mode == DispatcherModeMultiConn {
 		mdp.redisSubMap = make(map[string]*redis.PubSub)
-		go mdp.dealSubscribeRequest()
+		go mdp.dealMultiModeSubscribeRequest()
 	}
 
 	go mdp.dealDispatcherRequest()
@@ -285,11 +285,7 @@ func (mdp *MultiChannelDispatcherPool) PrintLength(duration time.Duration) {
 	}()
 }
 
-func (mdp *MultiChannelDispatcherPool) dealSubscribeRequestAndReceive() {
-	var (
-		receiveData interface{}
-		err         error
-	)
+func (mdp *MultiChannelDispatcherPool) dealSingleModeSubscribeRequest() {
 	for {
 		select {
 		case <-mdp.ctx.Done():
@@ -300,7 +296,7 @@ func (mdp *MultiChannelDispatcherPool) dealSubscribeRequestAndReceive() {
 			return
 		case <-mdp.printTicker.C:
 			str, _ := json.Marshal(mdp.subChannels)
-			log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:dealSubscribeRequestAndReceive mode: %s, mdp.subChannels lenth: %d, mdp.subChannels: %s", mdp.mode, len(mdp.subChannels), str)
+			log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:dealSingleModeSubscribeRequest mode: %s, mdp.subChannels lenth: %d, mdp.subChannels: %s", mdp.mode, len(mdp.subChannels), str)
 		case channel, ok := <-mdp.subChannelChan:
 			if ok {
 				mdp.subCount++
@@ -332,6 +328,20 @@ func (mdp *MultiChannelDispatcherPool) dealSubscribeRequestAndReceive() {
 					}
 				}
 			}
+		}
+	}
+}
+
+func (mdp *MultiChannelDispatcherPool) receiveAndPush() {
+	var (
+		receiveData interface{}
+		err         error
+	)
+	for {
+		select {
+		case <-mdp.ctx.Done():
+			_ = mdp.redisSub.Close()
+			return
 		case msg, ok := <-mdp.redisSub.Channel():
 			if !ok {
 				continue
@@ -340,7 +350,7 @@ func (mdp *MultiChannelDispatcherPool) dealSubscribeRequestAndReceive() {
 			if mdp.f != nil {
 				receiveData, err = mdp.f(msg)
 				if err != nil {
-					//log.Printf("MultiChannelDispatcherPool:dealSubscribeRequestAndReceive run processFunc fail, err: %s", err)
+					//log.Printf("MultiChannelDispatcherPool:dealSingleModeSubscribeRequest run processFunc fail, err: %s", err)
 					continue
 				}
 			}
@@ -351,14 +361,14 @@ func (mdp *MultiChannelDispatcherPool) dealSubscribeRequestAndReceive() {
 	}
 }
 
-func (mdp *MultiChannelDispatcherPool) dealSubscribeRequest() {
+func (mdp *MultiChannelDispatcherPool) dealMultiModeSubscribeRequest() {
 	for {
 		select {
 		case <-mdp.ctx.Done():
 			return
 		case <-mdp.printTicker.C:
 			str, _ := json.Marshal(mdp.subChannels)
-			log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:dealSubscribeRequest mode: %s, mdp.subChannels lenth: %d, mdp.subChannels: %s", mdp.mode, len(mdp.subChannels), str)
+			log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:dealMultiModeSubscribeRequest mode: %s, mdp.subChannels lenth: %d, mdp.subChannels: %s", mdp.mode, len(mdp.subChannels), str)
 		case channel, ok := <-mdp.subChannelChan:
 			if ok {
 				mdp.subCount++
@@ -382,7 +392,7 @@ func (mdp *MultiChannelDispatcherPool) dealSubscribeRequest() {
 						mdp.subChannelsLen--
 						if sub, ok := mdp.redisSubMap[channel]; ok {
 							if err := sub.Close(); err != nil {
-								log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:dealSubscribeRequest close redis sub err: %s", err)
+								log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:dealMultiModeSubscribeRequest close redis sub err: %s", err)
 							}
 						}
 					}
