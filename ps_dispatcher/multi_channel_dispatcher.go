@@ -163,6 +163,12 @@ func (md *MultiChannelDispatcher) PUnsubscribe(patterns ...string) {
 }
 
 func (md *MultiChannelDispatcher) Close() {
+	md.Reset()
+	md.mdp.DelDispatcher(md)
+	close(md.pubChannel)
+}
+
+func (md *MultiChannelDispatcher) Reset() {
 	md.subChannels.Range(func(channel, _ interface{}) bool {
 		md.mdp.unsubChannelChan <- channel.(string)
 		md.subChannels.Delete(channel)
@@ -174,8 +180,6 @@ func (md *MultiChannelDispatcher) Close() {
 		md.subPatterns.Delete(pattern)
 		return true
 	})
-	md.mdp.DelDispatcher(md)
-	close(md.pubChannel)
 }
 
 func (md *MultiChannelDispatcher) pub(msg *redis.Message, receiveData interface{}) {
