@@ -287,7 +287,6 @@ func (mdp *MultiChannelDispatcherPool) PrintLength(duration time.Duration) {
 }
 
 func (mdp *MultiChannelDispatcherPool) dealSingleModeSubscribeRequest() {
-	ticker := time.NewTicker(time.Minute)
 	go mdp.receiveAndPush()
 	for {
 		select {
@@ -328,9 +327,6 @@ func (mdp *MultiChannelDispatcherPool) dealSingleModeSubscribeRequest() {
 					}
 				}
 			}
-		case <-ticker.C:
-			log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:PrintLength mode: %s, subChannelsLen: %d, len(mdp.subChannels): %d, redisChanListLen: %d, mdp.subChannels: %+v", mdp.mode, mdp.subChannelsLen, len(mdp.subChannels), len(mdp.dispatcherList), mdp.subChannels)
-			log.Printf("pubsubDispatcher:MultiChannelDispatcherPool:PrintLength mode: %s, SubCount: %d, UnsubCount: %d, ConnectCount: %+d, BreakCount: %+d", mdp.mode, mdp.subCount, mdp.unsubCount, mdp.connectCount, mdp.breakCount)
 		}
 	}
 }
