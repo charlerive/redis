@@ -165,6 +165,9 @@ func (md *MultiChannelDispatcher) PUnsubscribe(patterns ...string) {
 func (md *MultiChannelDispatcher) Close() {
 	md.Reset()
 	md.mdp.DelDispatcher(md)
+}
+
+func (md *MultiChannelDispatcher) closeChannel() {
 	close(md.pubChannel)
 }
 
@@ -462,6 +465,7 @@ func (mdp *MultiChannelDispatcherPool) dealDispatcherRequest() {
 						break
 					}
 				}
+				dispatcher.closeChannel()
 			}
 		}
 	}
