@@ -9,20 +9,21 @@ import (
 type OpType uint8
 
 const (
-	Set   OpType = 1
-	HSet  OpType = 2
-	HMSet OpType = 3
-	HDel  OpType = 4
-	Pub   OpType = 5
-	LPush OpType = 6
-	RPush OpType = 7
-	Exp   OpType = 8
-	Del   OpType = 9
-	ZAdd  OpType = 10
-	ZRem  OpType = 11
-	Incr  OpType = 12
-	SAdd  OpType = 13
-	SRem  OpType = 14
+	Set               OpType = 1
+	HSet              OpType = 2
+	HMSet             OpType = 3
+	HDel              OpType = 4
+	Pub               OpType = 5
+	LPush             OpType = 6
+	RPush             OpType = 7
+	Exp               OpType = 8
+	Del               OpType = 9
+	ZAdd              OpType = 10
+	ZRem              OpType = 11
+	Incr              OpType = 12
+	SAdd              OpType = 13
+	SRem              OpType = 14
+	PipelineMaxLength        = 10000
 )
 
 type Operate struct {
@@ -46,8 +47,8 @@ func NewBatchOperate(ctx context.Context, redisCli *redis.Client, maxLen int, du
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if maxLen > 1000 {
-		maxLen = 1000
+	if maxLen > PipelineMaxLength {
+		maxLen = PipelineMaxLength
 	}
 	batchOperate := &BatchOperate{
 		ctx:           ctx,
@@ -55,7 +56,7 @@ func NewBatchOperate(ctx context.Context, redisCli *redis.Client, maxLen int, du
 		maxLen:        maxLen,
 		redisCli:      redisCli,
 		commitChannel: make(chan struct{}, 100),
-		batchChan:     make(chan *Operate, 5000),
+		batchChan:     make(chan *Operate, 10000),
 		cacheLen:      0,
 	}
 	go batchOperate.Start()
