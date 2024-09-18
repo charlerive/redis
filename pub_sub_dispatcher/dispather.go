@@ -73,7 +73,9 @@ func (rd *RedisDispatcher) Unsubscribe(subscriber *Subscriber, channel ...string
 
 func (rd *RedisDispatcher) dealRequest() {
 	timer := time.NewTimer(rd.printDuration)
-	timer.Stop()
+	if rd.printDuration == 0 {
+		timer.Stop()
+	}
 	ticker := time.NewTicker(time.Second)
 	duration := rd.printDuration
 	subscriberCounter, unsubscribeCounter := int64(0), int64(0)
@@ -114,9 +116,10 @@ func (rd *RedisDispatcher) dealRequest() {
 			}
 		case <-timer.C:
 			if rd.printCounter {
-				channelLen, subscriberLen := len(rd.dispatcherMap), int64(0)
+				channelLen, subscriberLen, dispatcherCounter := len(rd.dispatcherMap), int64(0), uint64(0)
 				subscriberIdMap := make(map[string]struct{})
 				for _, dp := range rd.dispatcherMap {
+					dispatcherCounter += dp.dispatcherCounter
 					for _, subscriber := range dp.subscriberMap {
 						if _, ok := subscriberIdMap[subscriber.Uuid]; !ok {
 							subscriberLen++
@@ -124,8 +127,8 @@ func (rd *RedisDispatcher) dealRequest() {
 						}
 					}
 				}
-				log.Printf("RedisDispatcher print counter, channel len: %d, subscriber length: %d, subscribe counter: %d, unsubscribe counter: %d",
-					channelLen, subscriberLen, subscriberCounter, unsubscribeCounter)
+				log.Printf("RedisDispatcher print counter, channel len: %d, subscriber length: %d, subscribe counter: %d, unsubscribe counter: %d, dispatcher counter: %d",
+					channelLen, subscriberLen, subscriberCounter, unsubscribeCounter, dispatcherCounter)
 			}
 			timer.Reset(rd.printDuration)
 		}
@@ -145,12 +148,13 @@ type subscriberRequest struct {
 }
 
 type dispatcher struct {
-	ctx            context.Context
-	cancel         context.CancelFunc
-	channel        string
-	pubSub         *redis.PubSub
-	subscriberMap  map[string]*Subscriber
-	requestChannel chan subscriberRequest
+	ctx               context.Context
+	cancel            context.CancelFunc
+	channel           string
+	dispatcherCounter uint64
+	pubSub            *redis.PubSub
+	subscriberMap     map[string]*Subscriber
+	requestChannel    chan subscriberRequest
 }
 
 func newDispatcher(ctx context.Context, channel string, redisClient *redis.Client) *dispatcher {
@@ -219,6 +223,7 @@ func (d *dispatcher) dealRequest() {
 				continue
 			}
 			for _, subscriber := range d.subscriberMap {
+				d.dispatcherCounter++
 				subscriber.Publish(msg)
 			}
 		}

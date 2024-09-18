@@ -60,6 +60,8 @@ func TestRedisDispatcher(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	rd := NewRedisDispatcher(context.Background(), redisCli)
+	rd.SetPrintDuration(time.Second)
+	rd.SetPrintCounter(true)
 
 	sub1 := NewSubscriber("123", rd)
 	sub1.Subscribe([]string{"test_channel:1", "test_channel:1"}...)
@@ -177,13 +179,15 @@ func TestRedisDispatcher(t *testing.T) {
 
 	t.Logf("publish msg")
 
-	time.Sleep(time.Second * 1)
+	time.Sleep(time.Second * 5)
 
 	sub1.Close()
 	sub2.Close()
 	sub3.Close()
 	sub4.Close()
 	sub5.Close()
+
+	time.Sleep(time.Second * 5)
 
 	t.Logf("close subscriber")
 
