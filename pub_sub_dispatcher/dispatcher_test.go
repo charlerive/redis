@@ -12,6 +12,31 @@ import (
 	"time"
 )
 
+func TestRegisterRedisDispatcher(t *testing.T) {
+	redisCli := redis.NewClient(&redis.Options{
+		Addr:        "127.0.0.1:6379",
+		Password:    "123456",
+		DB:          0,
+		DialTimeout: time.Second * 5,
+	})
+	rd, err := RegisterRedisDispatcher(context.Background(), "ss", redisCli)
+	if err != nil {
+		t.Errorf("register redis dispatcher error: %s", err.Error())
+		return
+	}
+
+	rd1, err1 := GetRedisDispatcher("ss")
+	if err1 != nil {
+		t.Errorf("get redis dispatcher error: %s", err1.Error())
+		return
+	}
+
+	if rd != rd1 {
+		t.Errorf("test register redis dispatcher error: %p, %p", rd1, rd)
+	}
+	t.Logf("test register redis dispatcher success: %p, %p", rd1, rd)
+}
+
 func TestRedisDispatcher(t *testing.T) {
 	var cpuProfile = flag.String("cpuprofile", "redis_dispatcher_pprof.prof", "write cpu profile to file")
 	flag.Parse()
