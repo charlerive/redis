@@ -25,6 +25,7 @@ type RedisDispatcher struct {
 	redisClient    *redis.Client
 	dispatcherMap  map[string]*dispatcher
 	requestChannel chan dispatcherRequest
+	printCounter   bool
 }
 
 func NewRedisDispatcher(ctx context.Context, redisClient *redis.Client) *RedisDispatcher {
@@ -41,6 +42,10 @@ func NewRedisDispatcher(ctx context.Context, redisClient *redis.Client) *RedisDi
 	}
 	go redisDispatcher.dealRequest()
 	return redisDispatcher
+}
+
+func (rd *RedisDispatcher) SetPrintCounter(print bool) {
+	rd.printCounter = print
 }
 
 func (rd *RedisDispatcher) Subscribe(subscriber *Subscriber, channel ...string) {
