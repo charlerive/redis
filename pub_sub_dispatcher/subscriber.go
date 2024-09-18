@@ -2,11 +2,14 @@ package pub_sub_dispatcher
 
 import (
 	"bytes"
+	"context"
 	"github.com/go-redis/redis/v8"
 	"sync"
 )
 
 type Subscriber struct {
+	ctx              context.Context
+	cancel           context.CancelFunc
 	Uuid             string
 	mu               sync.RWMutex
 	subscribeChannel map[string]struct{}
@@ -15,7 +18,10 @@ type Subscriber struct {
 }
 
 func NewSubscriber(uuid string, redisDispatcher *RedisDispatcher) *Subscriber {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Subscriber{
+		ctx:              ctx,
+		cancel:           cancel,
 		Uuid:             uuid,
 		mu:               sync.RWMutex{},
 		subscribeChannel: make(map[string]struct{}),
@@ -89,7 +95,11 @@ func (s *Subscriber) Close() {
 		subscribeChannels = append(subscribeChannels, channel)
 	}
 	s.mu.RUnlock()
-	s.redisDispatcher.Unsubscribe(s, subscribeChannels...)
+	s.cancel()
+	s.Unsubscribe(subscribeChannels...)
+	if len(s.subscribeChannel) == 0 {
+		s.closeChannel()
+	}
 }
 
 func (s *Subscriber) closeChannel() {
@@ -97,5 +107,7 @@ func (s *Subscriber) closeChannel() {
 }
 
 func (s *Subscriber) Publish(msg *redis.Message) {
-	s.publishChannel <- msg
+	if s.ctx.Err() == nil {
+		s.publishChannel <- msg
+	}
 }
