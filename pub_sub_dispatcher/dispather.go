@@ -72,10 +72,10 @@ func (rd *RedisDispatcher) Unsubscribe(subscriber *Subscriber, channel ...string
 }
 
 func (rd *RedisDispatcher) dealRequest() {
-	timer := time.NewTimer(rd.printDuration)
 	if rd.printDuration == 0 {
-		timer.Stop()
+		rd.printDuration = time.Minute
 	}
+	timer := time.NewTimer(rd.printDuration)
 	ticker := time.NewTicker(time.Second)
 	duration := rd.printDuration
 	subscriberCounter, unsubscribeCounter := int64(0), int64(0)
