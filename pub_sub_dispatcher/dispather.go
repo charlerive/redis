@@ -179,21 +179,27 @@ func newDispatcher(ctx context.Context, channel string, redisClient *redis.Clien
 }
 
 func (d *dispatcher) AddSubscriber(subscriber *Subscriber) {
-	d.requestChannel <- subscriberRequest{
-		requestType: SubscriberRequestTypeAdd,
-		subscriber:  subscriber,
+	if d.ctx.Err() == nil {
+		d.requestChannel <- subscriberRequest{
+			requestType: SubscriberRequestTypeAdd,
+			subscriber:  subscriber,
+		}
 	}
 }
 
 func (d *dispatcher) DelSubscriber(subscriber *Subscriber) {
-	d.requestChannel <- subscriberRequest{
-		requestType: SubscriberRequestTypeDel,
-		subscriber:  subscriber,
+	if d.ctx.Err() == nil {
+		d.requestChannel <- subscriberRequest{
+			requestType: SubscriberRequestTypeDel,
+			subscriber:  subscriber,
+		}
 	}
 }
 
 func (d *dispatcher) dealRequest() {
 	channel := d.pubSub.Channel()
+	ticker := time.NewTicker(time.Minute)
+	latestRequestTime := time.Now()
 	for {
 		select {
 		case <-d.ctx.Done():
@@ -204,6 +210,7 @@ func (d *dispatcher) dealRequest() {
 			if !ok {
 				continue
 			}
+			latestRequestTime = time.Now()
 			if request.requestType == SubscriberRequestTypeAdd {
 				d.subscriberMap[request.subscriber.Uuid] = request.subscriber
 			} else if request.requestType == SubscriberRequestTypeDel {
@@ -214,9 +221,6 @@ func (d *dispatcher) dealRequest() {
 				}
 				request.subscriber.mu.Unlock()
 				delete(d.subscriberMap, request.subscriber.Uuid)
-				if len(d.subscriberMap) == 0 {
-					d.cancel()
-				}
 			}
 		case msg, ok := <-channel:
 			if !ok {
@@ -225,6 +229,10 @@ func (d *dispatcher) dealRequest() {
 			for _, subscriber := range d.subscriberMap {
 				d.dispatcherCounter++
 				subscriber.Publish(msg)
+			}
+		case <-ticker.C:
+			if latestRequestTime.Add(time.Minute).Before(time.Now()) && len(d.subscriberMap) == 0 {
+				d.cancel()
 			}
 		}
 	}
