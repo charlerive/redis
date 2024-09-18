@@ -161,7 +161,7 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 
 	redisCli := redis.NewClient(&redis.Options{
 		Addr:        "127.0.0.1:6379",
-		Password:    "",
+		Password:    "123456",
 		DB:          0,
 		DialTimeout: time.Second * 5,
 	})
@@ -191,9 +191,9 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 		msgCount := 0
 		for {
 			select {
-			case msg, ok := <-md1.Channel():
+			case _, ok := <-md1.Channel():
 				if ok {
-					t.Logf("md1 receive msg: %+v", msg)
+					//t.Logf("md1 receive msg: %+v", msg)
 					msgCount++
 				} else {
 					t.Logf("md1 receive msgCount: %d", msgCount)
@@ -213,9 +213,9 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 		msgCount := 0
 		for {
 			select {
-			case msg, ok := <-md2.Channel():
+			case _, ok := <-md2.Channel():
 				if ok {
-					t.Logf("md2 receive msg: %+v", msg)
+					//t.Logf("md2 receive msg: %+v", msg)
 					msgCount++
 				} else {
 					t.Logf("md2 receive msgCount: %d", msgCount)
@@ -235,9 +235,9 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 		msgCount := 0
 		for {
 			select {
-			case msg, ok := <-md3.Channel():
+			case _, ok := <-md3.Channel():
 				if ok {
-					t.Logf("md3 receive msg: %+v", msg)
+					//t.Logf("md3 receive msg: %+v", msg)
 					msgCount++
 				} else {
 					t.Logf("md3 receive msgCount: %d", msgCount)
@@ -257,9 +257,9 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 		msgCount := 0
 		for {
 			select {
-			case msg, ok := <-md4.Channel():
+			case _, ok := <-md4.Channel():
 				if ok {
-					t.Logf("md4 receive msg: %+v", msg)
+					//t.Logf("md4 receive msg: %+v", msg)
 					msgCount++
 				} else {
 					t.Logf("md4 receive msgCount: %d", msgCount)
@@ -279,9 +279,9 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 		msgCount := 0
 		for {
 			select {
-			case msg, ok := <-md5.Channel():
+			case _, ok := <-md5.Channel():
 				if ok {
-					t.Logf("md5 receive msg: %+v", msg)
+					//t.Logf("md5 receive msg: %+v", msg)
 					msgCount++
 				} else {
 					t.Logf("md5 receive msgCount: %d", msgCount)
@@ -298,8 +298,8 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 	// sleep for MultiChannelDispatcher add
 	time.Sleep(time.Second)
 
-	for i := 0; i < 10; i++ {
-		pipe := redisCli.Pipeline()
+	pipe := redisCli.Pipeline()
+	for i := 0; i < 100000; i++ {
 		pipe.Publish(context.Background(), "test_channel:1", 1)
 		pipe.Publish(context.Background(), "test_channel:2", 2)
 		pipe.Publish(context.Background(), "test_channel:3", 3)
@@ -307,11 +307,11 @@ func TestMultiChannelDispatcher_ModeMulti(t *testing.T) {
 		pipe.Publish(context.Background(), "test_channel:5", 5)
 		pipe.Publish(context.Background(), "test_channel:6", 6)
 		pipe.Publish(context.Background(), "test_channel:12", 12)
-		_, _ = pipe.Exec(context.Background())
 	}
+	_, _ = pipe.Exec(context.Background())
 
 	// wait for msg receive
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 1)
 	mdp.DelDispatcher(md1)
 	mdp.DelDispatcher(md2)
 	mdp.DelDispatcher(md3)

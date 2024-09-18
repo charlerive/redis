@@ -188,15 +188,17 @@ func (md *MultiChannelDispatcher) Reset() {
 func (md *MultiChannelDispatcher) pub(msg *redis.Message, receiveData interface{}) {
 	if msg.Pattern == "" {
 		if _, ok := md.subChannels.Load(msg.Channel); ok {
-			if len(md.pubChannel) < 90 {
-				md.pubChannel <- receiveData
-			}
+			md.pubChannel <- receiveData
+			//if len(md.pubChannel) < 90 {
+			//	md.pubChannel <- receiveData
+			//}
 		}
 	} else if md.subPatternsLen > 0 {
 		if _, ok := md.subPatterns.Load(msg.Pattern); ok {
-			if len(md.pubChannel) < 90 {
-				md.pubChannel <- receiveData
-			}
+			md.pubChannel <- receiveData
+			//if len(md.pubChannel) < 90 {
+			//	md.pubChannel <- receiveData
+			//}
 		}
 	}
 }
