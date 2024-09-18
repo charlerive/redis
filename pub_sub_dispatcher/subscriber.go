@@ -58,31 +58,37 @@ func (s *Subscriber) ChannelsSize() int {
 
 func (s *Subscriber) Subscribe(channels ...string) {
 	subscribeChannels := make([]string, 0)
+	s.mu.RLock()
 	for _, channel := range channels {
 		if _, ok := s.subscribeChannel[channel]; !ok {
 			s.subscribeChannel[channel] = struct{}{}
 			subscribeChannels = append(subscribeChannels, channel)
 		}
 	}
+	s.mu.RUnlock()
 	s.redisDispatcher.Subscribe(s, subscribeChannels...)
 }
 
 func (s *Subscriber) Unsubscribe(channels ...string) {
 	unSubscribeChannels := make([]string, 0)
+	s.mu.RLock()
 	for _, channel := range channels {
 		if _, ok := s.subscribeChannel[channel]; ok {
 			delete(s.subscribeChannel, channel)
 			unSubscribeChannels = append(unSubscribeChannels, channel)
 		}
 	}
+	s.mu.RUnlock()
 	s.redisDispatcher.Unsubscribe(s, unSubscribeChannels...)
 }
 
 func (s *Subscriber) Close() {
 	subscribeChannels := make([]string, 0)
+	s.mu.RLock()
 	for channel := range s.subscribeChannel {
 		subscribeChannels = append(subscribeChannels, channel)
 	}
+	s.mu.RUnlock()
 	s.redisDispatcher.Unsubscribe(s, subscribeChannels...)
 }
 

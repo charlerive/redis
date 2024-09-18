@@ -203,10 +203,12 @@ func (d *dispatcher) dealRequest() {
 			if request.requestType == SubscriberRequestTypeAdd {
 				d.subscriberMap[request.subscriber.Uuid] = request.subscriber
 			} else if request.requestType == SubscriberRequestTypeDel {
+				request.subscriber.mu.Lock()
 				delete(request.subscriber.subscribeChannel, d.channel)
 				if len(request.subscriber.subscribeChannel) == 0 {
 					request.subscriber.closeChannel()
 				}
+				request.subscriber.mu.Unlock()
 				delete(d.subscriberMap, request.subscriber.Uuid)
 				if len(d.subscriberMap) == 0 {
 					d.cancel()
