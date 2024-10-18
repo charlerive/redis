@@ -126,17 +126,21 @@ func (rd *RedisDispatcher) dealRequest() {
 			if rd.printCounter {
 				channelLen, subscriberLen, dispatcherCounter := len(rd.dispatcherMap), int64(0), uint64(0)
 				subscriberIdMap := make(map[string]struct{})
+				channelList := make([]string, 0)
+				subscriberIdList := make([]string, 0)
 				for _, dp := range rd.dispatcherMap {
+					channelList = append(channelList, dp.channel)
 					dispatcherCounter += dp.dispatcherCounter
 					for _, subscriber := range dp.subscriberMap {
+						subscriberIdList = append(subscriberIdList, subscriber.Uuid)
 						if _, ok := subscriberIdMap[subscriber.Uuid]; !ok {
 							subscriberLen++
 							subscriberIdMap[subscriber.Uuid] = struct{}{}
 						}
 					}
 				}
-				log.Printf("RedisDispatcher print counter, channel len: %d, subscriber length: %d, subscribe counter: %d, unsubscribe counter: %d, dispatcher counter: %d",
-					channelLen, subscriberLen, subscriberCounter, unsubscribeCounter, dispatcherCounter)
+				log.Printf("RedisDispatcher print counter, channel len: %d, subscriber length: %d, subscribe counter: %d, unsubscribe counter: %d, dispatcher counter: %d. channels: %+v, subscribers: %+v",
+					channelLen, subscriberLen, subscriberCounter, unsubscribeCounter, dispatcherCounter, channelList, subscriberIdList)
 			}
 			timer.Reset(rd.printDuration)
 		}
