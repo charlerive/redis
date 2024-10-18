@@ -77,6 +77,7 @@ func (rd *RedisDispatcher) dealRequest() {
 	}
 	timer := time.NewTimer(rd.printDuration)
 	ticker := time.NewTicker(time.Second)
+	dpTicker := time.NewTicker(time.Minute)
 	duration := rd.printDuration
 	subscriberCounter, unsubscribeCounter := int64(0), int64(0)
 	for {
@@ -107,6 +108,13 @@ func (rd *RedisDispatcher) dealRequest() {
 						unsubscribeCounter++
 					}
 
+				}
+			}
+		case <-dpTicker.C:
+			for channel, dp := range rd.dispatcherMap {
+				if dp.lastRequestTime.Add(time.Minute).Before(time.Now()) && len(dp.subscriberMap) == 0 {
+					dp.cancel()
+					delete(rd.dispatcherMap, channel)
 				}
 			}
 		case <-ticker.C:
@@ -155,6 +163,7 @@ type dispatcher struct {
 	pubSub            *redis.PubSub
 	subscriberMap     map[string]*Subscriber
 	requestChannel    chan subscriberRequest
+	lastRequestTime   time.Time
 }
 
 func newDispatcher(ctx context.Context, channel string, redisClient *redis.Client) *dispatcher {
@@ -198,8 +207,7 @@ func (d *dispatcher) DelSubscriber(subscriber *Subscriber) {
 
 func (d *dispatcher) dealRequest() {
 	channel := d.pubSub.Channel()
-	ticker := time.NewTicker(time.Minute)
-	latestRequestTime := time.Now()
+	d.lastRequestTime = time.Now()
 	for {
 		select {
 		case <-d.ctx.Done():
@@ -210,7 +218,7 @@ func (d *dispatcher) dealRequest() {
 			if !ok {
 				continue
 			}
-			latestRequestTime = time.Now()
+			d.lastRequestTime = time.Now()
 			if request.requestType == SubscriberRequestTypeAdd {
 				d.subscriberMap[request.subscriber.Uuid] = request.subscriber
 			} else if request.requestType == SubscriberRequestTypeDel {
@@ -224,10 +232,7 @@ func (d *dispatcher) dealRequest() {
 				d.dispatcherCounter++
 				subscriber.Publish(msg)
 			}
-		case <-ticker.C:
-			if latestRequestTime.Add(time.Minute).Before(time.Now()) && len(d.subscriberMap) == 0 {
-				d.cancel()
-			}
+
 		}
 	}
 }

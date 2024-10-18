@@ -164,22 +164,30 @@ func TestRedisDispatcher(t *testing.T) {
 	sub1.Subscribe("test_channel:1*")
 
 	time.Sleep(time.Second)
-
-	pipe := redisCli.Pipeline()
-	for i := 0; i < 100000; i++ {
-		pipe.Publish(context.Background(), "test_channel:1", 1)
-		pipe.Publish(context.Background(), "test_channel:2", 2)
-		pipe.Publish(context.Background(), "test_channel:3", 3)
-		pipe.Publish(context.Background(), "test_channel:4", 4)
-		pipe.Publish(context.Background(), "test_channel:5", 5)
-		pipe.Publish(context.Background(), "test_channel:6", 6)
-		pipe.Publish(context.Background(), "test_channel:12", 12)
-	}
-	_, _ = pipe.Exec(context.Background())
+	go func() {
+		for i := 0; i < 10000; i++ {
+			pipe := redisCli.Pipeline()
+			pipe.Publish(context.Background(), "test_channel:1", 1)
+			pipe.Publish(context.Background(), "test_channel:2", 2)
+			pipe.Publish(context.Background(), "test_channel:3", 3)
+			pipe.Publish(context.Background(), "test_channel:4", 4)
+			pipe.Publish(context.Background(), "test_channel:5", 5)
+			pipe.Publish(context.Background(), "test_channel:6", 6)
+			pipe.Publish(context.Background(), "test_channel:12", 12)
+			_, _ = pipe.Exec(context.Background())
+			time.Sleep(time.Millisecond * 10)
+		}
+	}()
 
 	t.Logf("publish msg")
 
-	time.Sleep(time.Second * 5)
+	sub1.Unsubscribe("test_channel:1")
+	sub2.Unsubscribe("test_channel:2")
+	sub3.Unsubscribe("test_channel:3")
+	sub4.Unsubscribe("test_channel:4")
+	sub5.Unsubscribe("test_channel:5")
+
+	time.Sleep(time.Second * 50)
 
 	sub1.Close()
 	sub2.Close()
