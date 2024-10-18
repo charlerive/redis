@@ -132,9 +132,9 @@ func (rd *RedisDispatcher) dealRequest() {
 					channelList = append(channelList, dp.channel)
 					dispatcherCounter += dp.dispatcherCounter
 					for _, subscriber := range dp.subscriberMap {
-						subscriberIdList = append(subscriberIdList, subscriber.Uuid)
 						if _, ok := subscriberIdMap[subscriber.Uuid]; !ok {
 							subscriberLen++
+							subscriberIdList = append(subscriberIdList, subscriber.Uuid)
 							subscriberIdMap[subscriber.Uuid] = struct{}{}
 						}
 					}
