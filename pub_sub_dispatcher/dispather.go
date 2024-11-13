@@ -2,7 +2,7 @@ package pub_sub_dispatcher
 
 import (
 	"context"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"log"
 	"strings"
 	"time"
@@ -24,14 +24,14 @@ type dispatcherRequest struct {
 type RedisDispatcher struct {
 	Ctx            context.Context
 	Cancel         context.CancelFunc
-	redisClient    *redis.Client
+	redisClient    redis.UniversalClient
 	dispatcherMap  map[string]*dispatcher
 	requestChannel chan dispatcherRequest
 	printCounter   bool
 	printDuration  time.Duration
 }
 
-func NewRedisDispatcher(ctx context.Context, redisClient *redis.Client) *RedisDispatcher {
+func NewRedisDispatcher(ctx context.Context, redisClient redis.UniversalClient) *RedisDispatcher {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -170,7 +170,7 @@ type dispatcher struct {
 	lastRequestTime   time.Time
 }
 
-func newDispatcher(ctx context.Context, channel string, redisClient *redis.Client) *dispatcher {
+func newDispatcher(ctx context.Context, channel string, redisClient redis.UniversalClient) *dispatcher {
 	if ctx == nil {
 		ctx = context.Background()
 	}

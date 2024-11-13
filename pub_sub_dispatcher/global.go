@@ -3,7 +3,7 @@ package pub_sub_dispatcher
 import (
 	"context"
 	"fmt"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"sync"
 )
 
@@ -18,7 +18,7 @@ func GetRedisDispatcher(alias string) (*RedisDispatcher, error) {
 	return nil, fmt.Errorf("pubsubDispatcher:GetRedisDispatcher dispatcher not fund")
 }
 
-func RegisterRedisDispatcher(ctx context.Context, alias string, redisClient *redis.Client) (rd *RedisDispatcher, err error) {
+func RegisterRedisDispatcher(ctx context.Context, alias string, redisClient redis.UniversalClient) (rd *RedisDispatcher, err error) {
 	if _, ok := dispatcherMap.Load(alias); ok {
 		return nil, fmt.Errorf("pubsubDispatcher:RegisterRedisDispatcher fail. alias: %s has allready used. ", alias)
 	}

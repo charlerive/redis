@@ -3,7 +3,7 @@ package ps_dispatcher
 import (
 	"context"
 	"fmt"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"log"
 	"sync"
 )
@@ -19,7 +19,7 @@ func GetSingleChannelDispatcherPool(alias string) (*SingleChannelDispatcherPool,
 	return nil, fmt.Errorf("pubsubDispatcher:GetSingleChannelDispatcherPool dispatcher not fund")
 }
 
-func RegisterSingleChannelDispatcherPool(alias string, redisCli *redis.Client, subChannel string) (dp *SingleChannelDispatcherPool, err error) {
+func RegisterSingleChannelDispatcherPool(alias string, redisCli redis.UniversalClient, subChannel string) (dp *SingleChannelDispatcherPool, err error) {
 	if _, ok := singleDispatcherMap.Load(alias); ok {
 		return nil, fmt.Errorf("pubsubDispatcher:RegisterSingleChannelDispatcherPool fail. alias: %s has allready used. ", alias)
 	}

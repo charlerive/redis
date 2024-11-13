@@ -2,7 +2,7 @@ package batch_operate
 
 import (
 	"context"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"time"
 )
 
@@ -37,13 +37,13 @@ type BatchOperate struct {
 	ctx           context.Context
 	ticker        *time.Ticker
 	maxLen        int
-	redisCli      *redis.Client
+	redisCli      redis.UniversalClient
 	batchChan     chan *Operate
 	commitChannel chan struct{}
 	cacheLen      int
 }
 
-func NewBatchOperate(ctx context.Context, redisCli *redis.Client, maxLen int, duration time.Duration) *BatchOperate {
+func NewBatchOperate(ctx context.Context, redisCli redis.UniversalClient, maxLen int, duration time.Duration) *BatchOperate {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -114,7 +114,7 @@ func (bo *BatchOperate) Start() {
 				values := op.Args.([]interface{})
 				if len(values) == 2 {
 					if f, ok := values[0].(float64); ok {
-						pipe.ZAdd(bo.ctx, op.Key, &redis.Z{Score: f, Member: values[1]})
+						pipe.ZAdd(bo.ctx, op.Key, redis.Z{Score: f, Member: values[1]})
 					}
 				}
 			case ZRem:

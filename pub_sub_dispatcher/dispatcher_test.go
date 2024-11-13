@@ -3,7 +3,7 @@ package pub_sub_dispatcher
 import (
 	"context"
 	"flag"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"log"
 	"os"
 	"runtime/pprof"

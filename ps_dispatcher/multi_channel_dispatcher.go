@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"log"
 	"strings"
 	"sync"
@@ -22,7 +22,7 @@ func GetMultiChannelDispatcherPool(alias string) (*MultiChannelDispatcherPool, e
 	return nil, fmt.Errorf("pubsubDispatcher:GetMultiChannelDispatcherPool dispatcher not fund")
 }
 
-func RegisterMultiChannelDispatcherPool(alias string, redisClient *redis.Client, mode dispatcherMode) (mdp *MultiChannelDispatcherPool, err error) {
+func RegisterMultiChannelDispatcherPool(alias string, redisClient redis.UniversalClient, mode dispatcherMode) (mdp *MultiChannelDispatcherPool, err error) {
 	if _, ok := multiDispatcherMap.Load(alias); ok {
 		return nil, fmt.Errorf("pubsubDispatcher:RegisterMultiChannelDispatcherPool fail. alias: %s has allready used. ", alias)
 	}
@@ -206,7 +206,7 @@ func (md *MultiChannelDispatcher) pub(msg *redis.Message, receiveData interface{
 type MultiChannelDispatcherPool struct {
 	ctx               context.Context
 	mode              dispatcherMode
-	redisClient       *redis.Client
+	redisClient       redis.UniversalClient
 	subChannels       map[string]int64
 	redisSub          *redis.PubSub
 	redisSubMap       map[string]*redis.PubSub
@@ -241,7 +241,7 @@ func (m dispatcherMode) String() string {
 	return ""
 }
 
-func NewMultiChannelDispatcherPool(ctx context.Context, redisClient *redis.Client, mode dispatcherMode) (mdp *MultiChannelDispatcherPool) {
+func NewMultiChannelDispatcherPool(ctx context.Context, redisClient redis.UniversalClient, mode dispatcherMode) (mdp *MultiChannelDispatcherPool) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
