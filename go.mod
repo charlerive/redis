@@ -1,4 +1,4 @@
-module github.com/charlerive/redis/v1
+module github.com/charlerive/redis
 
 go 1.18
 
