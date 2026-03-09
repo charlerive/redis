@@ -10,7 +10,7 @@ import (
 
 type OpType uint8
 
-const Debug = false
+var Debug = false
 
 const (
 	Set               OpType = 1
