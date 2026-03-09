@@ -77,8 +77,8 @@ func (bo *BatchOperate) Start() {
 			if bo.cacheLen > 0 {
 				if Debug {
 					startTime := time.Now()
-					_, _ = pipe.Exec(context.Background())
-					log.Printf("batchOperate ctx done took %s, length: %d\n", time.Now().Sub(startTime), bo.cacheLen)
+					cmds, _ := pipe.Exec(context.Background())
+					log.Printf("batchOperate ctx done took %s, length: %d, msg: %+v\n", time.Now().Sub(startTime), bo.cacheLen, cmds)
 				} else {
 					_, _ = pipe.Exec(context.Background())
 				}
@@ -89,8 +89,8 @@ func (bo *BatchOperate) Start() {
 			if bo.cacheLen > 0 {
 				if Debug {
 					startTime := time.Now()
-					_, _ = pipe.Exec(bo.ctx)
-					log.Printf("batchOperate ticker exec took %s, length: %d\n", time.Now().Sub(startTime), bo.cacheLen)
+					cmds, _ := pipe.Exec(bo.ctx)
+					log.Printf("batchOperate ticker exec took %s, length: %d, msg:%+v\n", time.Now().Sub(startTime), bo.cacheLen, cmds)
 				} else {
 					_, _ = pipe.Exec(bo.ctx)
 				}
@@ -100,8 +100,8 @@ func (bo *BatchOperate) Start() {
 			if bo.cacheLen > 0 {
 				if Debug {
 					startTime := time.Now()
-					_, _ = pipe.Exec(bo.ctx)
-					log.Printf("batchOperate receive commit command exec took %s, length: %d\n", time.Now().Sub(startTime), bo.cacheLen)
+					cmds, _ := pipe.Exec(bo.ctx)
+					log.Printf("batchOperate receive commit command exec took %s, length: %d, msg:%+v\n", time.Now().Sub(startTime), bo.cacheLen, cmds)
 				} else {
 					_, _ = pipe.Exec(bo.ctx)
 				}
@@ -155,8 +155,8 @@ func (bo *BatchOperate) Start() {
 			if bo.cacheLen >= bo.maxLen {
 				if Debug {
 					startTime := time.Now()
-					_, _ = pipe.Exec(bo.ctx)
-					log.Printf("batchOperate over max len exec took %s, length: %d\n", time.Now().Sub(startTime), bo.cacheLen)
+					cmds, _ := pipe.Exec(bo.ctx)
+					log.Printf("batchOperate over max len exec took %s, length: %d, msg: %+v\n", time.Now().Sub(startTime), bo.cacheLen, cmds)
 				} else {
 					_, _ = pipe.Exec(bo.ctx)
 				}
