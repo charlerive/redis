@@ -2,11 +2,15 @@ package batch_operate
 
 import (
 	"context"
-	"github.com/redis/go-redis/v9"
+	"log"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type OpType uint8
+
+const Debug = false
 
 const (
 	Set               OpType = 1
@@ -70,18 +74,36 @@ func (bo *BatchOperate) Start() {
 		select {
 		case <-bo.ctx.Done():
 			if bo.cacheLen > 0 {
-				_, _ = pipe.Exec(context.Background())
+				if Debug {
+					startTime := time.Now()
+					_, _ = pipe.Exec(context.Background())
+					log.Printf("batchOperate ctx done took %s, length: %d\n", time.Now().Sub(startTime), bo.cacheLen)
+				} else {
+					_, _ = pipe.Exec(context.Background())
+				}
 			}
 			bo.ticker.Stop()
 			return
 		case <-bo.ticker.C:
 			if bo.cacheLen > 0 {
-				_, _ = pipe.Exec(bo.ctx)
+				if Debug {
+					startTime := time.Now()
+					_, _ = pipe.Exec(bo.ctx)
+					log.Printf("batchOperate ticker exec took %s, length: %d\n", time.Now().Sub(startTime), bo.cacheLen)
+				} else {
+					_, _ = pipe.Exec(bo.ctx)
+				}
 				bo.cacheLen = 0
 			}
 		case <-bo.commitChannel:
 			if bo.cacheLen > 0 {
-				_, _ = pipe.Exec(bo.ctx)
+				if Debug {
+					startTime := time.Now()
+					_, _ = pipe.Exec(bo.ctx)
+					log.Printf("batchOperate receive commit command exec took %s, length: %d\n", time.Now().Sub(startTime), bo.cacheLen)
+				} else {
+					_, _ = pipe.Exec(bo.ctx)
+				}
 				bo.cacheLen = 0
 			}
 		case op := <-bo.batchChan:
@@ -130,7 +152,13 @@ func (bo *BatchOperate) Start() {
 				pipe.SRem(bo.ctx, op.Key, values...)
 			}
 			if bo.cacheLen >= bo.maxLen {
-				_, _ = pipe.Exec(bo.ctx)
+				if Debug {
+					startTime := time.Now()
+					_, _ = pipe.Exec(bo.ctx)
+					log.Printf("batchOperate over max len exec took %s, length: %d\n", time.Now().Sub(startTime), bo.cacheLen)
+				} else {
+					_, _ = pipe.Exec(bo.ctx)
+				}
 				bo.cacheLen = 0
 			}
 		}
