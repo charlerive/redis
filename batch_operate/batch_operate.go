@@ -68,7 +68,7 @@ func NewBatchOperate(ctx context.Context, redisCli redis.UniversalClient, maxLen
 }
 
 func (bo *BatchOperate) Start() {
-	log.SetFlags(log.Lmicroseconds)
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	bo.cacheLen = 0
 	pipe := bo.redisCli.Pipeline()
 	for {
