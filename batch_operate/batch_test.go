@@ -4,13 +4,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/redis/go-redis/v9"
 	"log"
 	"os"
 	"runtime/pprof"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func TestBatchOperate(t *testing.T) {
@@ -27,10 +28,10 @@ func TestBatchOperate(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := sync.WaitGroup{}
-
+	Debug = true
 	redisCli := redis.NewClient(&redis.Options{
 		Addr:        "127.0.0.1:6379",
-		Password:    "",
+		Password:    "123456",
 		DB:          0,
 		DialTimeout: time.Second * 5,
 	})
@@ -43,6 +44,7 @@ func TestBatchOperate(t *testing.T) {
 			t.Logf("subscribe.Subscribe err: %s", err)
 		}
 		ch := subscribe.Channel()
+		t.Logf("channel: %v", ch)
 		for {
 			select {
 			case <-ctx.Done():
@@ -75,11 +77,18 @@ func TestBatchOperate(t *testing.T) {
 		key := fmt.Sprintf("test_hmset_key:%d", i)
 		batchOperate.HMSet(key, i, i)
 	}
-
-	for i := 1; i <= 10000; i++ {
+	go func() {
+		i := 1
 		key := fmt.Sprintf("test_pub_key:%d", i)
-		batchOperate.Publish(key, i)
-	}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				batchOperate.Publish(key, i)
+			}
+		}
+	}()
 
 	for i := 1; i <= 10000; i++ {
 		key := "test_lpush_key"

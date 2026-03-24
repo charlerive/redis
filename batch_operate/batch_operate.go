@@ -3,6 +3,7 @@ package batch_operate
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -30,11 +31,29 @@ const (
 	PipelineMaxLength        = 10000
 )
 
-type Operate struct {
+type OperateItem struct {
 	OpType
 	Key     string
 	ExpTime time.Duration
 	Args    interface{}
+}
+
+var operatePool = sync.Pool{
+	New: func() interface{} {
+		return &OperateItem{}
+	},
+}
+
+func GetOperate() *OperateItem {
+	return operatePool.Get().(*OperateItem)
+}
+
+func PutOperate(op *OperateItem) {
+	op.OpType = 0
+	op.Key = ""
+	op.ExpTime = 0
+	op.Args = nil
+	operatePool.Put(op)
 }
 
 type BatchOperate struct {
@@ -42,7 +61,7 @@ type BatchOperate struct {
 	ticker        *time.Ticker
 	maxLen        int
 	redisCli      redis.UniversalClient
-	batchChan     chan *Operate
+	batchChan     chan *OperateItem
 	commitChannel chan struct{}
 	cacheLen      int
 }
@@ -60,7 +79,7 @@ func NewBatchOperate(ctx context.Context, redisCli redis.UniversalClient, maxLen
 		maxLen:        maxLen,
 		redisCli:      redisCli,
 		commitChannel: make(chan struct{}, 100),
-		batchChan:     make(chan *Operate, 10000),
+		batchChan:     make(chan *OperateItem, 10000),
 		cacheLen:      0,
 	}
 	go batchOperate.Start()
@@ -152,6 +171,7 @@ func (bo *BatchOperate) Start() {
 				values := op.Args.([]interface{})
 				pipe.SRem(bo.ctx, op.Key, values...)
 			}
+			PutOperate(op)
 			if bo.cacheLen >= bo.maxLen {
 				if Debug {
 					startTime := time.Now()
@@ -171,128 +191,114 @@ func (bo *BatchOperate) Commit() {
 }
 
 func (bo *BatchOperate) Set(key string, value interface{}, expiration time.Duration) {
-	op := &Operate{
-		OpType:  Set,
-		Key:     key,
-		ExpTime: expiration,
-		Args:    value,
-	}
+	op := GetOperate()
+	op.OpType = Set
+	op.Key = key
+	op.ExpTime = expiration
+	op.Args = value
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) HSet(key string, values ...interface{}) {
-	op := &Operate{
-		OpType: HSet,
-		Key:    key,
-		Args:   values,
-	}
+	op := GetOperate()
+	op.OpType = HSet
+	op.Key = key
+	op.Args = values
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) HMSet(key string, values ...interface{}) {
-	op := &Operate{
-		OpType: HMSet,
-		Key:    key,
-		Args:   values,
-	}
+	op := GetOperate()
+	op.OpType = HMSet
+	op.Key = key
+	op.Args = values
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) HDel(key string, values ...string) {
-	op := &Operate{
-		OpType: HDel,
-		Key:    key,
-		Args:   values,
-	}
+	op := GetOperate()
+	op.OpType = HDel
+	op.Key = key
+	op.Args = values
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) Publish(channel string, message interface{}) {
-	op := &Operate{
-		OpType: Pub,
-		Key:    channel,
-		Args:   message,
-	}
+	op := GetOperate()
+	op.OpType = Pub
+	op.Key = channel
+	op.Args = message
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) LPush(key string, values ...interface{}) {
-	op := &Operate{
-		OpType: LPush,
-		Key:    key,
-		Args:   values,
-	}
+	op := GetOperate()
+	op.OpType = LPush
+	op.Key = key
+	op.Args = values
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) RPush(key string, values ...interface{}) {
-	op := &Operate{
-		OpType: RPush,
-		Key:    key,
-		Args:   values,
-	}
+	op := GetOperate()
+	op.OpType = RPush
+	op.Key = key
+	op.Args = values
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) Expire(key string, expiration time.Duration) {
-	op := &Operate{
-		OpType:  Exp,
-		Key:     key,
-		ExpTime: expiration,
-	}
+	op := GetOperate()
+	op.OpType = Exp
+	op.Key = key
+	op.ExpTime = expiration
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) Del(key string) {
-	op := &Operate{
-		OpType: Del,
-		Key:    key,
-	}
+	op := GetOperate()
+	op.OpType = Del
+	op.Key = key
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) ZAdd(key string, member interface{}, score float64) {
-	op := &Operate{
-		OpType: ZAdd,
-		Key:    key,
-		Args:   []interface{}{score, member},
-	}
+	op := GetOperate()
+	op.OpType = ZAdd
+	op.Key = key
+	op.Args = []interface{}{score, member}
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) ZRem(key string, member ...interface{}) {
-	op := &Operate{
-		OpType: ZRem,
-		Key:    key,
-		Args:   member,
-	}
+	op := GetOperate()
+	op.OpType = ZRem
+	op.Key = key
+	op.Args = member
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) Incr(key string, delta float64) {
-	op := &Operate{
-		OpType: Incr,
-		Key:    key,
-		Args:   delta,
-	}
+	op := GetOperate()
+	op.OpType = Incr
+	op.Key = key
+	op.Args = delta
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) SAdd(key string, member ...interface{}) {
-	op := &Operate{
-		OpType: SAdd,
-		Key:    key,
-		Args:   member,
-	}
+	op := GetOperate()
+	op.OpType = SAdd
+	op.Key = key
+	op.Args = member
 	bo.batchChan <- op
 }
 
 func (bo *BatchOperate) SRem(key string, member ...interface{}) {
-	op := &Operate{
-		OpType: SRem,
-		Key:    key,
-		Args:   member,
-	}
+	op := GetOperate()
+	op.OpType = SRem
+	op.Key = key
+	op.Args = member
 	bo.batchChan <- op
 }
 
